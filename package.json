@@ -1,0 +1,17 @@
+{
+  "name": "wedding-board",
+  "version": "0.1.0",
+  "description": "A shared, auto-arranging wedding planning canvas with a Claude-powered chat box. Runs locally; open from any device on your Wi-Fi.",
+  "type": "module",
+  "private": true,
+  "license": "MIT",
+  "engines": { "node": ">=20" },
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node --watch server.js",
+    "test": "node --test \"test/*.test.js\""
+  },
+  "dependencies": {
+    "express": "^4.21.2"
+  }
+}

@@ -1,0 +1,62 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+  <meta name="theme-color" content="#FBF5EC">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <title>Wedding Board</title>
+  <link rel="manifest" href="/manifest.webmanifest">
+  <link rel="icon" href="/icon.svg" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="/icon.svg">
+  <link rel="stylesheet" href="/style.css">
+</head>
+<body>
+  <div id="app" hidden>
+    <header id="top">
+      <div class="brand"><span class="logo">🪔</span><b id="title">Wedding Board</b></div>
+      <input id="search" type="search" placeholder="Search the board…" autocomplete="off">
+      <div class="tools">
+        <button id="searchBtn" class="tbtn only-small" title="Search">🔍</button>
+        <button id="undo" class="tbtn" title="Undo last change" disabled>↶</button>
+        <button id="addSec" class="tbtn" title="Add a section">＋<span class="hide-small"> Section</span></button>
+        <span class="zoom hide-small"><button id="zoomOut" class="tbtn" title="Zoom out">−</button><span id="zoomLbl">100%</span><button id="zoomIn" class="tbtn" title="Zoom in">+</button></span>
+        <button id="fit" class="tbtn" title="Re-arrange and fit to screen">⤢ Fit</button>
+      </div>
+    </header>
+
+    <main id="vp"><div id="world"></div></main>
+
+    <section id="chat" hidden>
+      <div class="chat-head"><b>Conversation with Claude</b><span><button id="chatClear" class="link">Clear</button><button id="chatClose" class="tbtn">✕</button></span></div>
+      <div id="chatList"></div>
+    </section>
+
+    <footer id="composer">
+      <div id="status" hidden></div>
+      <div id="atts"></div>
+      <div class="row">
+        <button id="chatBtn" class="cbtn" title="Show conversation">💬</button>
+        <button id="attBtn" class="cbtn" title="Add photo (or paste / drop one)">📎</button>
+        <textarea id="msg" rows="1" enterkeyhint="send" placeholder="Tell Claude anything… “Booked Umaid Bhawan for Sangeet, ₹12 lakh, 250 guests”"></textarea>
+        <button id="send" class="cbtn primary" title="Send">➤</button>
+      </div>
+      <input type="file" id="file" accept="image/*" multiple hidden>
+    </footer>
+  </div>
+
+  <div id="lock" hidden>
+    <form id="lockForm">
+      <div class="logo big">🪔</div>
+      <h2>Wedding Board</h2>
+      <input id="pin" type="password" inputmode="numeric" autocomplete="current-password" placeholder="PIN" autofocus>
+      <button class="primary">Unlock</button>
+      <p id="lockErr"></p>
+    </form>
+  </div>
+
+  <div id="toasts"></div>
+  <script type="module" src="/app.js"></script>
+</body>
+</html>
