@@ -1,16 +1,18 @@
-// Pure auto-layout: sections become frames packed into lanes; cards flow (masonry) inside frames.
+// Pure auto-layout: a hero banner on top, then sections packed into lanes; cards flow (masonry) inside sections.
 // No DOM access here so it can be unit-tested.
 
 export const CARD_W = 232;
-export const GAP = 12;
-export const PAD = 14;
-export const HEAD = 48;
-export const FRAME_GAP = 18;
-export const EMPTY_BODY = 72;
+export const GAP = 14;
+export const PAD = 16;
+export const HEAD = 58;
+export const SLIM = 46;
+export const FRAME_GAP = 22;
 
 export const frameWidth = (cols) => PAD * 2 + cols * CARD_W + (cols - 1) * GAP;
+export const wideWidth = (cols) => (cols >= 2 ? cols * CARD_W + (cols - 1) * GAP : CARD_W);
+export const boardWidth = ({ cols, lanes }) => lanes * frameWidth(cols) + (lanes - 1) * FRAME_GAP;
 
-/** Pick frame columns and lane count so that "fit to width" stays comfortably readable. */
+/** Pick section columns and lane count so that "fit to width" stays comfortably readable. */
 export function pickProfile(viewportW) {
   const cols = viewportW < 900 ? 1 : 2;
   const laneW = frameWidth(cols);
@@ -19,49 +21,63 @@ export function pickProfile(viewportW) {
 }
 
 /**
- * sections: [{id, kind?, collapsed?}]
+ * sections: [{id, kind?, collapsed?}]   (kind 'dashboard' is the banner)
  * cardIds:  { [sectionId]: [cardId, ...] } display order
- * heights:  { [cardId | sectionId(for dashboard)]: px }
- * returns { frames: {id:{x,y,w,h,bodyTop}}, cards: {id:{x,y}}, width, height }
+ * heights:  { [cardId | bannerSectionId]: px }
+ * wide:     { [cardId]: true } cards that span the full section width
+ * returns { frames: {id:{x,y,w,h,slim?}}, cards: {id:{x,y}}, width, height }
  */
-export function layout({ sections, cardIds, heights, cols, lanes }) {
+export function layout({ sections, cardIds, heights, wide = {}, cols, lanes }) {
   const laneW = frameWidth(cols);
-  const laneY = new Array(lanes).fill(0);
+  const width = boardWidth({ cols, lanes });
   const frames = {};
   const cards = {};
 
-  for (const sec of sections) {
+  const banner = sections.find((s) => s.kind === 'dashboard');
+  let top = 0;
+  if (banner) {
+    const h = heights[banner.id] ?? 220;
+    frames[banner.id] = { x: 0, y: 0, w: width, h };
+    top = h + FRAME_GAP;
+  }
+
+  // sections with something in them first; empty ones become slim bars at the end
+  const real = sections.filter((s) => s.kind !== 'dashboard');
+  const filled = real.filter((s) => cardIds[s.id]?.length);
+  const empty = real.filter((s) => !cardIds[s.id]?.length);
+  const laneY = new Array(lanes).fill(top);
+
+  for (const sec of [...filled, ...empty]) {
+    const ids = cardIds[sec.id] || [];
     const rel = {};
-    let bodyH;
-    if (sec.kind === 'dashboard') {
-      bodyH = heights[sec.id] ?? 280;
-    } else if (sec.collapsed) {
-      bodyH = 0;
-    } else {
+    let h;
+    if (!ids.length) h = SLIM;
+    else if (sec.collapsed) h = HEAD;
+    else {
       const colY = new Array(cols).fill(0);
-      const ids = cardIds[sec.id] || [];
       for (const id of ids) {
-        const c = colY.indexOf(Math.min(...colY));
-        rel[id] = { x: PAD + c * (CARD_W + GAP), y: HEAD + colY[c] };
-        colY[c] += (heights[id] ?? 120) + GAP;
+        const ch = heights[id] ?? 120;
+        if (wide[id] && cols > 1) {
+          const y = Math.max(...colY);
+          rel[id] = { x: PAD, y: HEAD + y };
+          colY.fill(y + ch + GAP);
+        } else {
+          const c = colY.indexOf(Math.min(...colY));
+          rel[id] = { x: PAD + c * (CARD_W + GAP), y: HEAD + colY[c] };
+          colY[c] += ch + GAP;
+        }
       }
-      bodyH = ids.length ? Math.max(...colY) - GAP : EMPTY_BODY;
+      h = HEAD + Math.max(...colY) - GAP + PAD;
     }
-    const h = sec.collapsed ? HEAD : HEAD + bodyH + PAD;
     const lane = laneY.indexOf(Math.min(...laneY));
     const x = lane * (laneW + FRAME_GAP);
     const y = laneY[lane];
     laneY[lane] += h + FRAME_GAP;
-    frames[sec.id] = { x, y, w: laneW, h, bodyTop: HEAD };
+    frames[sec.id] = { x, y, w: laneW, h, slim: !ids.length };
     for (const [id, p] of Object.entries(rel)) cards[id] = { x: x + p.x, y: y + p.y };
   }
 
-  return {
-    frames,
-    cards,
-    width: lanes * laneW + (lanes - 1) * FRAME_GAP,
-    height: Math.max(0, Math.max(...laneY) - FRAME_GAP),
-  };
+  return { frames, cards, width, height: Math.max(top, Math.max(...laneY) - FRAME_GAP) };
 }
 
 /** Index at which a dragged card should be inserted among `ids` (excluding the dragged one). */
@@ -78,6 +94,7 @@ export function insertionIndex(ids, cardPos, heights, px, py) {
     if (d < bestD) { bestD = d; best = i; }
   }
   const p = cardPos[ids[best]];
+  if (!p) return ids.length;
   const h = heights[ids[best]] ?? 120;
   const dy = py - (p.y + h / 2);
   const dx = px - (p.x + CARD_W / 2);

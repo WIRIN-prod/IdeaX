@@ -5,7 +5,7 @@ import os from 'node:os';
 import crypto from 'node:crypto';
 import { fileURLToPath } from 'node:url';
 import { Store } from './lib/store.js';
-import { planWithClaude, fallbackPlan } from './lib/claude.js';
+import { planWithClaude, fallbackPlan, captureBrief, ARRANGE_BRIEF } from './lib/claude.js';
 
 const ROOT = path.dirname(fileURLToPath(import.meta.url));
 const PORT = +process.env.PORT || 3000;
@@ -84,22 +84,26 @@ app.post('/api/upload', guard, express.raw({ type: () => true, limit: '25mb' }),
   res.json({ url: `/uploads/${name}` });
 });
 
-// --- chat: one Claude call at a time ---
+// --- Claude work: one call at a time ---
 let queue = Promise.resolve();
+const enqueue = (fn) => { const job = queue.then(fn); queue = job.catch(() => {}); return job; };
+const claudeOpts = () => ({ data: store.view(), uploadsDir: UPLOADS, scratchDir: path.join(DATA_DIR, 'claude-cwd') });
+const cleanAttachments = (list) => (Array.isArray(list) ? list : [])
+  .filter((a) => /^\/uploads\/[\w-]+\.(jpg|png|webp|gif)$/.test(a?.url || '') && fs.existsSync(path.join(UPLOADS, path.basename(a.url))))
+  .slice(0, 8)
+  .map((a) => ({ url: a.url, w: a.w, h: a.h }));
+
 app.post('/api/chat', ...jsonOnly, needJson, (req, res) => {
   const message = typeof req.body?.message === 'string' ? req.body.message.trim().slice(0, 4000) : '';
-  const attachments = (Array.isArray(req.body?.attachments) ? req.body.attachments : [])
-    .filter((a) => /^\/uploads\/[\w-]+\.(jpg|png|webp|gif)$/.test(a?.url || '') && fs.existsSync(path.join(UPLOADS, path.basename(a.url))))
-    .slice(0, 6)
-    .map((a) => ({ url: a.url, w: a.w, h: a.h }));
+  const attachments = cleanAttachments(req.body?.attachments);
   if (!message && !attachments.length) return res.status(400).json({ error: 'Say something or attach a photo' });
 
-  const job = queue.then(async () => {
+  enqueue(async () => {
     store.addChat({ role: 'user', text: message, images: attachments.map((a) => a.url) });
     let plan;
     let note = '';
     try {
-      plan = await planWithClaude({ data: store.view(), message, attachments, uploadsDir: UPLOADS, scratchDir: path.join(DATA_DIR, 'claude-cwd') });
+      plan = await planWithClaude({ ...claudeOpts(), message, attachments });
     } catch (e) {
       console.error('[claude]', e.message);
       plan = fallbackPlan(message, attachments);
@@ -110,9 +114,55 @@ app.post('/api/chat', ...jsonOnly, needJson, (req, res) => {
     const added = applied.filter((a) => a.op === 'add_card').map((a) => a.id);
     store.addChat({ role: 'assistant', text: plan.reply + note, added });
     return { reply: plan.reply + note, added, board: store.view() };
-  });
-  queue = job.catch(() => {});
-  job.then((r) => res.json(r)).catch((e) => res.status(500).json({ error: e.message }));
+  }).then((r) => res.json(r)).catch((e) => res.status(500).json({ error: e.message }));
+});
+
+// --- capture: things appear on the board instantly, Claude sorts them in the background ---
+let sorting = false;
+async function sortCaptures() {
+  if (sorting) return;
+  sorting = true;
+  try {
+    while (store.data.cards.some((c) => c.pending)) {
+      await enqueue(async () => {
+        const batch = store.data.cards.filter((c) => c.pending).slice(0, 6);
+        if (!batch.length) return;
+        const ids = batch.map((c) => c.id);
+        try {
+          const plan = await planWithClaude({ ...claudeOpts(), message: captureBrief(batch), attachments: batch.filter((c) => c.img).map((c) => c.img) });
+          store.settle(ids, { silent: true });
+          const { errors } = store.apply(plan.ops);
+          if (errors.length) console.warn('[ops]', errors.join('; '));
+          store.addChat({ role: 'assistant', text: plan.reply, added: ids });
+        } catch (e) {
+          console.error('[claude]', e.message);
+        } finally {
+          store.settle(ids);
+        }
+      });
+    }
+  } finally { sorting = false; }
+}
+
+app.post('/api/capture', ...jsonOnly, needJson, (req, res) => {
+  const text = typeof req.body?.text === 'string' ? req.body.text.trim().slice(0, 4000) : '';
+  const images = cleanAttachments(req.body?.images);
+  const section = typeof req.body?.section === 'string' ? req.body.section : undefined;
+  const items = images.length ? images.map((img, i) => ({ img, text: i === 0 ? text : '', section })) : [{ text, section }];
+  const ids = store.addRaw(items);
+  if (!ids.length) return res.status(400).json({ error: 'Nothing to add' });
+  res.json({ ids, board: store.view() });
+  sortCaptures();
+});
+
+app.post('/api/arrange', ...jsonOnly, needJson, (req, res) => {
+  enqueue(async () => {
+    const plan = await planWithClaude({ ...claudeOpts(), message: ARRANGE_BRIEF });
+    const { applied, errors } = store.apply(plan.ops);
+    if (errors.length) console.warn('[ops]', errors.join('; '));
+    store.addChat({ role: 'assistant', text: plan.reply });
+    return { reply: plan.reply, changed: applied.length, board: store.view() };
+  }).then((r) => res.json(r)).catch((e) => res.status(502).json({ error: `Claude could not tidy the board: ${e.message}` }));
 });
 
 // --- live sync to every open device ---

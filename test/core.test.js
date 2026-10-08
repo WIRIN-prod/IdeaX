@@ -29,22 +29,32 @@ test('daysUntil', () => {
   assert.equal(daysUntil('2026-10-07', new Date(2026, 9, 8)), -1);
 });
 
-test('layout packs frames into the shortest lane and flows cards', () => {
-  const sections = [{ id: 'a' }, { id: 'b' }, { id: 'c' }];
-  const cardIds = { a: ['1', '2', '3'], b: ['4'], c: [] };
-  const heights = { 1: 100, 2: 100, 3: 100, 4: 100 };
+test('layout: banner on top, sections in lanes, empty sections become slim bars at the end', () => {
+  const sections = [{ id: 'top', kind: 'dashboard' }, { id: 'empty' }, { id: 'a' }, { id: 'b' }];
+  const cardIds = { empty: [], a: ['1', '2', '3'], b: ['4'] };
+  const heights = { top: 200, 1: 100, 2: 100, 3: 100, 4: 100 };
   const L = layout({ sections, cardIds, heights, cols: 2, lanes: 2 });
+  assert.deepEqual([L.frames.top.x, L.frames.top.y, L.frames.top.w], [0, 0, L.width], 'banner spans the board');
+  assert.ok(L.frames.a.y >= 200 && L.frames.b.y >= 200, 'sections start below the banner');
   assert.equal(L.frames.a.x, 0);
   assert.ok(L.frames.b.x > 0, 'b goes to the second lane');
-  assert.equal(L.frames.c.x, L.frames.b.x, 'c goes under b (shorter lane)');
-  assert.notEqual(L.cards[1].x, L.cards[2].x, 'two columns inside a frame');
+  assert.ok(L.frames.empty.slim && L.frames.empty.h < L.frames.b.h, 'empty section is a slim bar');
+  assert.ok(L.frames.empty.y > L.frames.b.y, 'and is placed after the filled ones');
+  assert.notEqual(L.cards[1].x, L.cards[2].x, 'two columns inside a section');
   assert.ok(L.cards[3].y > L.cards[1].y, 'third card flows under the first');
-  assert.ok(L.height > 0 && L.width > 0);
+});
+
+test('layout: a featured (wide) card takes a full row', () => {
+  const L = layout({ sections: [{ id: 'a' }], cardIds: { a: ['1', 'w', '2', '3'] }, heights: { 1: 100, w: 80, 2: 50, 3: 50 }, wide: { w: true }, cols: 2, lanes: 1 });
+  assert.equal(L.cards.w.x, L.cards[1].x, 'wide card starts at the left edge');
+  assert.ok(L.cards.w.y > L.cards[1].y, 'below what came before');
+  assert.equal(L.cards[2].y, L.cards[3].y, 'both columns resume below it');
+  assert.ok(L.cards[2].y > L.cards.w.y);
 });
 
 test('collapsed sections only take their header', () => {
   const L = layout({ sections: [{ id: 'a', collapsed: true }], cardIds: { a: ['1'] }, heights: { 1: 200 }, cols: 1, lanes: 1 });
-  assert.equal(L.frames.a.h, 48);
+  assert.equal(L.frames.a.h, 58);
   assert.equal(L.cards[1], undefined);
 });
 
@@ -133,4 +143,41 @@ test('fallback routes by keyword and extracts amounts', () => {
   assert.equal(p.ops[0].card.section, 'outfits');
   assert.equal(p.ops[0].card.estimate, 800000);
   assert.equal(fallbackPlan('', [{ url: '/uploads/a.jpg' }]).ops[0].card.attachment, 0);
+});
+
+test('deleted cards go to the trash and can be restored', () => {
+  const s = new Store(tmp());
+  const id = s.data.cards.find((c) => c.title === 'Haldi').id;
+  s.apply([{ op: 'delete_card', id }]);
+  assert.ok(!s.data.cards.some((c) => c.id === id));
+  assert.equal(s.data.trash[0].id, id);
+  s.apply([{ op: 'restore_card', id }]);
+  assert.equal(s.data.cards.find((c) => c.id === id).section, 'events');
+  assert.equal(s.data.trash.length, 0);
+});
+
+test('raw captures appear at once, keep the original words, and settle', () => {
+  const s = new Store(tmp());
+  const long = 'mom wants marigolds everywhere but I really want a pastel palette, need to find a middle ground somehow';
+  const ids = s.addRaw([{ text: long }, { img: { url: '/uploads/a-1.jpg', w: 800, h: 600 } }, { text: '   ' }]);
+  assert.equal(ids.length, 2);
+  const [note, photo] = ids.map((id) => s.data.cards.find((c) => c.id === id));
+  assert.equal(note.section, 'ideas');
+  assert.equal(note.source, long);
+  assert.equal(note.look, 'sticky');
+  assert.ok(note.pending && photo.pending && photo.img);
+  s.apply([{ op: 'update_card', id: note.id, patch: { title: 'Marigold vs pastel', section: 'decor', look: 'quote', colors: ['#F4A300', 'nope'], featured: true } }]);
+  assert.equal(note.source, long, 'original text survives being organised');
+  assert.deepEqual([note.section, note.look, note.featured, note.colors], ['decor', 'quote', true, ['#F4A300']]);
+  s.settle(ids);
+  assert.ok(!s.data.cards.some((c) => c.pending));
+});
+
+test('order_section reorders one section and leaves others alone', () => {
+  const board = { sections: [{ id: 'x', title: 'X' }, { id: 'y', title: 'Y' }], cards: [], settings: {} };
+  applyOps(board, [['x', 'a'], ['y', 'm'], ['x', 'b'], ['x', 'c']].map(([section, title]) => ({ op: 'add_card', card: { section, title } })));
+  const id = (t) => board.cards.find((c) => c.title === t).id;
+  applyOps(board, [{ op: 'order_section', section_id: 'x', ids: [id('c'), id('a')] }]);
+  assert.deepEqual(board.cards.filter((c) => c.section === 'x').map((c) => c.title), ['c', 'a', 'b']);
+  assert.deepEqual(board.cards.filter((c) => c.section === 'y').map((c) => c.title), ['m']);
 });

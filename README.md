@@ -35,19 +35,23 @@ Without `BOARD_PIN`, anyone on your Wi-Fi can open and edit the board. Set a PIN
 
 ## Using the board
 
-- **Chat box (bottom):** write naturally. *"Booked Umaid Bhawan for the Sangeet, ₹12 lakh, paid 2 lakh advance"*, *"Sharma family from Delhi, 18 people, bride's side"*, *"ideas for a marigold and pink mandap"*, *"how much have we planned vs paid?"*. Claude adds or updates cards, sets amounts and dates, and answers questions about the board. Everything is undoable with ↶.
-- **Photos:** paste (Ctrl/⌘+V) or use 📎 / the phone camera, then send. Claude looks at the photo, titles it, tags it and files it. Dropping a photo straight onto a section adds it there without Claude.
-- **Canvas:** sections are frames that pack themselves into columns; cards flow inside them. Drag a card to reorder or move it to another section (on touch: press and hold). Scroll or drag to pan; pinch or Ctrl+scroll to zoom; **Fit** re-arranges and fits the screen.
-- **Click a card** to edit budget, paid, guest count, date, status, side (bride/groom), tags, link, photo. **⋯** on a section renames, recolours, reorders or deletes it; **＋ Section** adds your own.
-- **Overview card:** wedding countdown, budget vs planned vs paid, spend by category, guest totals by side, next functions, to-do progress. Items with status *idea*, *shortlisted* or *declined* are not counted as planned spend, so comparing three venues does not triple your budget.
+It is a moodboard, not a form. Dump things on it however they come out and Claude arranges them.
+
+- **Drop anything:** type a half-formed thought in the bar at the bottom, or paste a photo or text anywhere on the board (Ctrl/⌘+V), or drag photos in, or use 📎 / the phone camera. It appears on the board instantly, marked "Claude is arranging…". A few seconds later it has a proper title, sits in the right section, and carries tags, amounts, dates and a colour palette where they apply. One note that mentions three things becomes three cards.
+- **Ask or instruct:** *"how much is planned vs paid?"*, *"ideas for a marigold and pink mandap"*, *"move the Leela card to shortlisted"*. Questions and instructions are answered in the bar instead of becoming cards.
+- **How things look:** photos become polaroids, loose thoughts become handwritten sticky notes, lines worth remembering become quotes, to-dos get a checkbox, and concrete things (a venue, a vendor, a guest group) become neat fact cards. The most important card in a section can be featured at double width. Claude picks; you can change it by clicking the card.
+- **✨ Arrange:** Claude goes over the whole board: moves strays to the right section, puts related cards together, cleans up titles, merges duplicates. One ↶ undoes it.
+- **🕘 Journal:** everything you ever added, newest first, grouped by day, with the words you originally typed. Click an entry to fly to it on the board. Deleted cards wait at the bottom of the journal and can be restored.
+- **Canvas:** sections pack themselves into columns and empty sections shrink to slim bars. Drag a card to reorder or move it (on touch: press and hold). Scroll or drag to pan; pinch or Ctrl+scroll to zoom; **Fit** fits the screen. ◐ switches light and dark.
+- **Banner:** names, date and countdown, budget vs planned vs paid, biggest spend, guests by side, next function, to-do progress. Items with status *idea*, *shortlisted* or *declined* are not counted as planned spend, so comparing three venues does not triple your budget.
 
 ## How the Claude part works
 
-The server runs the `claude` CLI headlessly (`claude -p`) with your existing Claude subscription login. No API key is needed, and a stray `ANTHROPIC_API_KEY` is ignored on purpose. Install Claude Code and run `claude` once to log in. Claude gets a compact JSON view of the board plus your message and replies with validated operations (add/update/move cards, set budget…). It has no tools except reading the photos you attach. If Claude is unavailable, the chat falls back to simple keyword filing so nothing you type is lost.
+The server runs the `claude` CLI headlessly (`claude -p`) with your existing Claude subscription login. No API key is needed, and a stray `ANTHROPIC_API_KEY` is ignored on purpose. Install Claude Code and run `claude` once to log in. Claude gets a compact JSON view of the board plus what you dropped and replies with validated operations (add/update/move/reorder cards, set budget…). It has no tools except reading the photos you attach. If Claude is unavailable, what you dropped simply stays in the Inspiration Inbox as you wrote it, so nothing is lost.
 
 ## Your data
 
-- `data/board.json`: the board (also a daily copy in `data/backups/`). `uploads/`: photos (resized to ≤1600px in the browser).
+- `data/board.json`: the board, the journal and deleted items (also a daily copy in `data/backups/`). `uploads/`: photos (resized to ≤1600px in the browser).
 - Both are git-ignored, so pushing this repo to GitHub publishes the app, not your wedding.
 - To move to another computer, copy `data/` and `uploads/`.
 
