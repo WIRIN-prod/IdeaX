@@ -29,6 +29,7 @@ Optional settings (environment variables):
 | `HOST` | `127.0.0.1` to allow only this computer (default `0.0.0.0` = whole Wi-Fi) |
 | `ALLOWED_HOSTS` | extra hostnames to accept, e.g. a Tailscale name (`my-pc.tail1234.ts.net`) |
 | `WB_MODEL` | Claude model for the chat (default `sonnet`) |
+| `WB_NO_WEB` | set to `1` to stop Claude searching the web in conversation |
 | `WB_DATA_DIR`, `WB_UPLOADS_DIR` | where `board.json` and photos live (default `./data`, `./uploads`) |
 
 Without `BOARD_PIN`, anyone on your Wi-Fi can open and edit the board. Set a PIN if you share networks.
@@ -37,21 +38,24 @@ Without `BOARD_PIN`, anyone on your Wi-Fi can open and edit the board. Set a PIN
 
 It is a moodboard, not a form. Dump things on it however they come out and Claude arranges them.
 
-- **Drop anything:** type a half-formed thought in the bar at the bottom, or paste a photo or text anywhere on the board (Ctrl/⌘+V), or drag photos in, or use 📎 / the phone camera. It appears on the board instantly, marked "Claude is arranging…". A few seconds later it has a proper title, sits in the right section, and carries tags, amounts, dates and a colour palette where they apply. One note that mentions three things becomes three cards.
-- **Ask or instruct:** *"how much is planned vs paid?"*, *"ideas for a marigold and pink mandap"*, *"move the Leela card to shortlisted"*. Questions and instructions are answered in the bar instead of becoming cards.
-- **How things look:** photos become polaroids, loose thoughts become handwritten sticky notes, lines worth remembering become quotes, to-dos get a checkbox, and concrete things (a venue, a vendor, a guest group) become neat fact cards. The most important card in a section can be featured at double width. Claude picks; you can change it by clicking the card.
-- **✨ Arrange:** Claude goes over the whole board: moves strays to the right section, puts related cards together, cleans up titles, merges duplicates. One ↶ undoes it.
-- **🕘 Journal:** everything you ever added, newest first, grouped by day, with the words you originally typed. Click an entry to fly to it on the board. Deleted cards wait at the bottom of the journal and can be restored.
-- **Canvas:** sections pack themselves into columns and empty sections shrink to slim bars. Drag a card to reorder or move it (on touch: press and hold). Scroll or drag to pan; pinch or Ctrl+scroll to zoom; **Fit** fits the screen. ◐ switches light and dark.
-- **Banner:** names, date and countdown, budget vs planned vs paid, biggest spend, guests by side, next function, to-do progress. Items with status *idea*, *shortlisted* or *declined* are not counted as planned spend, so comparing three venues does not triple your budget.
+- **Talk to Claude:** the bar at the bottom is a conversation. Ask (*"what is still pending discussion?"*, *"what should we be doing this month?"*, *"ideas for a marigold and pink mandap"*) and it answers in the Claude panel, remembering what you said before. Tell it things (*"Taj quoted 12 lakh for the sangeet, 2 lakh token paid"*) and it puts them on the board and says what it did. It can search the web when you ask for something it cannot know.
+- **Chat inside a section:** 💬 on any section opens a conversation just about that section, with its own thread. New notes land there.
+- **Paste or drop:** paste a photo or text anywhere on the board (Ctrl/⌘+V), drag photos in, or use 📎 / the phone camera. It appears instantly, marked "Claude is arranging…", and a few seconds later has a title, the right section, tags, amounts and a colour palette.
+- **Post-its:** every note is a post-it in its section's colour, whether you add it or Claude does. Photos are polaroids. A note can be a quote or a to-do with a checkbox, and can be featured at double width.
+- **Decisions:** any note can be stamped 💬 *To discuss*, ⏸ *Parked* or 🔒 *Locked in*. Say *"park the vintage car idea"* or *"the Taj is final"*, or set it on the note. The pills at the top left dim everything else; the **Decisions** tab lists all three groups with one-tap lock / park / reopen. Parked notes are left out of the budget.
+- **Plan:** the complete checklist for an Indian wedding, about 75 steps from "agree the budget" to "collect the marriage certificate", in eight phases with due dates worked back from your wedding day. Tick steps yourself or tell Claude what is done; add your own steps. Each step links to a section chat.
+- **✨ Arrange:** Claude goes over the whole board: moves strays, groups related notes, cleans up titles, merges duplicates. One ↶ undoes it.
+- **Journal:** everything you ever added, newest first, with the words you originally typed. Click an entry to fly to it. Deleted notes wait at the bottom and can be restored.
+- **Canvas:** sections pack themselves into columns and empty sections shrink to slim bars. Drag a note to reorder or move it (on touch: press and hold). Scroll or drag to pan; pinch or Ctrl+scroll to zoom; **Fit** fits the screen. ◐ switches light and dark.
+- **Banner:** names, date and countdown, budget vs planned vs paid, guests by side, next function, decisions, and plan progress. Notes with status *idea*, *shortlisted* or *declined* are not counted as planned spend, so comparing three venues does not triple your budget.
 
 ## How the Claude part works
 
-The server runs the `claude` CLI headlessly (`claude -p`) with your existing Claude subscription login. No API key is needed, and a stray `ANTHROPIC_API_KEY` is ignored on purpose. Install Claude Code and run `claude` once to log in. Claude gets a compact JSON view of the board plus what you dropped and replies with validated operations (add/update/move/reorder cards, set budget…). It has no tools except reading the photos you attach. If Claude is unavailable, what you dropped simply stays in the Inspiration Inbox as you wrote it, so nothing is lost.
+The server runs the `claude` CLI headlessly (`claude -p`) with your existing Claude subscription login. No API key is needed, and a stray `ANTHROPIC_API_KEY` is ignored on purpose. Install Claude Code and run `claude` once to log in. Claude gets a compact JSON view of the board plus what you dropped and replies with validated operations (add/update/move/reorder cards, set budget…). Its only tools are reading the photos you attach and, in conversation, web search (turn that off with `WB_NO_WEB=1`). If Claude is unavailable, what you dropped simply stays in the Inspiration Inbox as you wrote it, so nothing is lost.
 
 ## Your data
 
-- `data/board.json`: the board, the journal and deleted items (also a daily copy in `data/backups/`). `uploads/`: photos (resized to ≤1600px in the browser).
+- `data/board.json`: the board, conversations, plan progress, the journal and deleted items (also a daily copy in `data/backups/`). `uploads/`: photos (resized to ≤1600px in the browser).
 - Both are git-ignored, so pushing this repo to GitHub publishes the app, not your wedding.
 - To move to another computer, copy `data/` and `uploads/`.
 

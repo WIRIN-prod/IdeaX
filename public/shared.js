@@ -42,5 +42,5 @@ export function statusTone(status) {
   return 'warn';
 }
 
-/** Options that are still ideas, shortlisted or declined are not committed spend. */
-export const countsTowardBudget = (card) => !/(idea|shortlist|declin|cancel|reject|maybe|inspo|consider)/i.test(card.status || '');
+/** Options that are still ideas, shortlisted, declined or parked are not committed spend. */
+export const countsTowardBudget = (card) => card.stage !== 'parked' && !/(idea|shortlist|declin|cancel|reject|maybe|inspo|consider)/i.test(card.status || '');

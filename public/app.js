@@ -5,24 +5,23 @@ import { CARD_W, layout, pickProfile, insertionIndex, boardWidth } from './layou
 const vp = $('#vp');
 const world = $('#world');
 const SWATCHES = ['#D98E04', '#C2185B', '#00796B', '#3949AB', '#E8590C', '#6B8E23', '#8E2432', '#7B4EA3', '#0B7285', '#B8860B'];
-const LOOKS = { card: 'Card', sticky: 'Sticky note', quote: 'Quote', task: 'To-do' };
-const GLYPH = { card: '▤', sticky: '✎', quote: '❝', task: '☑', photo: '▣' };
+const LOOKS = { sticky: 'Note', quote: 'Quote', task: 'To-do' };
+const GLYPH = { sticky: '✎', quote: '❝', task: '☑', photo: '▣' };
+const STAGES = { discuss: '💬 To discuss', parked: '⏸ Parked', locked: '🔒 Locked in' };
 const EXAMPLES = [
   'mom wants marigolds everywhere, I want pastel. need to find a middle',
   'Booked Taj Falaknuma for the Sangeet, ₹12 lakh, 2 lakh advance paid',
   "Sharma family from Delhi, 18 people, bride's side, all functions",
   'Ideas for a mandap in marigold and pink?',
-  'How much have we planned vs paid so far?',
+  'What is still pending discussion?',
+  'What should we be doing this month?',
 ];
-// typed text that is a question or an instruction goes to Claude as chat; everything else is dropped on the board first
-const ASKING = /\?\s*$|^(how|what|which|when|where|who|why|is|are|do|does|did|can|could|should|show|list|move|delete|remove|rename|set|change|update|undo|suggest|give|tell|find|compare|ideas?)\b/i;
-
 const S = {
   board: null, rev: 0, view: { x: 0, y: 0, k: 1 }, profile: null, lay: null, heights: {}, tilt: {},
   cardNodes: new Map(), frameNodes: new Map(), sigs: new Map(), hero: null, slot: null,
   ptrs: new Map(), mode: null, pending: null, drag: null, last: null, pinch: null,
   q: '', attachments: [], busy: false, fresh: new Set(), dirty: false, pasteHook: null, animOn: false,
-  tab: 'journal', lastChat: 0,
+  tab: 'chat', lastChat: 0, scope: null, filter: null, pendingMsg: null, planOpen: null,
 };
 
 // ---------------------------------------------------------------- API
@@ -82,14 +81,15 @@ function setBoard(b) {
   document.title = names ? `${names} · Wedding Board` : 'Wedding Board';
   // surface what Claude says after sorting things in the background
   const lastA = [...(b.chat || [])].reverse().find((m) => m.role === 'assistant');
-  if (lastA && lastA.t > S.lastChat) { if (!first && !S.busy) say(lastA.text); S.lastChat = lastA.t; }
+  if (lastA && lastA.t > S.lastChat) { if (!first && !S.busy && !chatVisible()) say(lastA.text); S.lastChat = lastA.t; }
+  renderFilters();
 }
 
 // ---------------------------------------------------------------- rendering
 const sectionOf = (id) => S.board.sections.find((s) => s.id === id);
 const sum = (cards, key) => cards.reduce((t, c) => t + (c[key] || 0), 0);
 const hash = (id) => { let x = 7; for (const ch of id) x = (x * 31 + ch.charCodeAt(0)) >>> 0; return x; };
-const lookOf = (card) => (card.img ? 'photo' : LOOKS[card.look] ? card.look : 'card');
+const lookOf = (card) => (card.img ? 'photo' : card.look === 'quote' || card.look === 'task' ? card.look : 'sticky'); // every card is a post-it; look is only the flavour
 const isDone = (card) => /^(done|complete|finished)/i.test(card.status || '');
 
 function fmtDate(iso) {
@@ -127,9 +127,9 @@ function render() {
     const look = lookOf(card);
     const hsh = hash(card.id);
     node.style.setProperty('--c', sec.color);
-    node.className = ['card', `look-${look}`, `t${hsh % 5}`, card.featured && 'wide', card.pending && 'pending', sec.collapsed && 'folded', isDone(card) && 'done',
+    node.className = ['card', look === 'photo' ? 'look-photo' : `note v-${look}`, card.stage && `st-${card.stage}`, card.featured && 'wide', card.pending && 'pending', sec.collapsed && 'folded', isDone(card) && 'done',
       S.drag?.id === card.id && 'dragging'].filter(Boolean).join(' ');
-    S.tilt[card.id] = look === 'photo' || look === 'sticky' ? (((hsh >> 3) % 27) / 26 - 0.5) * 2.8 : 0;
+    S.tilt[card.id] = (((hsh >> 3) % 27) / 26 - 0.5) * 2.6;
     const sig = JSON.stringify(card);
     if (S.sigs.get(card.id) !== sig) { S.sigs.set(card.id, sig); node.replaceChildren(...cardContent(card, look)); }
     if (S.fresh.has(card.id)) { node.classList.add('fresh'); setTimeout(() => node.classList.remove('fresh'), 1700); }
@@ -211,7 +211,8 @@ function frameHead(sec, mine) {
       onclick: () => (mine.length ? sendOps([{ op: 'update_section', id: sec.id, section: { collapsed: !sec.collapsed } }]) : openEditor(null, sec.id)) },
     sec.title, mine.length ? h('span', { class: 'fcount' }, mine.length) : null),
     est ? h('span', { class: 'fsum' }, formatINR(est)) : null,
-    h('button', { class: 'ficon', title: 'Add something here', onclick: () => openEditor(null, sec.id) }, '+'),
+    h('button', { class: 'ficon', title: `Chat with Claude about ${sec.title}`, onclick: () => setScope(sec.id) }, '💬'),
+    h('button', { class: 'ficon', title: 'Add a note here', onclick: () => openEditor(null, sec.id) }, '+'),
     h('button', { class: 'ficon', title: 'Section settings', onclick: () => openSection(sec.id) }, '⋯'));
 }
 
@@ -246,35 +247,32 @@ function cardContent(card, look) {
   // a raw capture has the same words in title and body; show them once
   const body = card.body && card.body.trim() !== card.title.trim() ? card.body : null;
   const rawTitle = card.body && card.title.replace(/…$/, '') === card.body.slice(0, card.title.replace(/…$/, '').length);
+  const stamp = card.stage ? h('span', { class: `stamp s-${card.stage}` }, STAGES[card.stage]) : null;
+  const note = body ? h('div', { class: 'cnote' }, body) : null;
   if (look === 'photo') {
     const ratio = clamp(card.img.w / card.img.h, card.featured ? 1.3 : 0.72, 2.4); // featured photos are cropped to landscape so they don't tower
     return [h('img', { class: 'cimg', src: card.img.url, alt: '', loading: 'lazy', style: { aspectRatio: String(ratio) } }),
-      h('div', { class: 'cbody' }, h('div', { class: 'ctitle' }, card.title), body ? h('div', { class: 'cnote' }, body) : null, facts(card))];
-  }
-  if (look === 'sticky') {
-    return [h('div', { class: 'cbody' }, rawTitle ? null : h('div', { class: 'ctitle' }, card.title), body ? h('div', { class: 'cnote' }, body) : null, facts(card))];
+      h('div', { class: 'cbody' }, stamp, h('div', { class: 'ctitle' }, card.title), note, facts(card))];
   }
   if (look === 'quote') {
-    return [h('div', { class: 'cbody' }, h('div', { class: 'qtext' }, body || card.title), body && !rawTitle ? h('div', { class: 'qby' }, card.title) : null, facts(card))];
+    return [h('div', { class: 'cbody' }, stamp, h('div', { class: 'qtext' }, body || card.title), body && !rawTitle ? h('div', { class: 'qby' }, card.title) : null, facts(card))];
   }
   if (look === 'task') {
     return [h('div', { class: 'cbody' },
       h('button', { class: 'check', title: isDone(card) ? 'Mark as not done' : 'Mark as done', onclick: () => sendOps([{ op: 'update_card', id: card.id, patch: { status: isDone(card) ? null : 'done' } }]) }, '✓'),
-      h('div', { class: 'ctitle' }, card.title), body ? h('div', { class: 'cnote' }, body) : null, facts(card, { status: false }))];
+      h('div', { class: 'ctitle' }, card.title), stamp, note, facts(card, { status: false }))];
   }
-  return [h('div', { class: 'cbody' },
-    card.status ? h('div', { class: 'ctop' }, h('span', { class: `status ${statusTone(card.status)}` }, card.status)) : null,
-    h('div', { class: 'ctitle' }, card.title), body ? h('div', { class: 'cnote' }, body) : null, facts(card, { status: false }))];
+  return [h('div', { class: 'cbody' }, stamp, rawTitle ? null : h('div', { class: 'ctitle' }, card.title), note, facts(card))];
 }
 
 function buildHero(b, narrow) {
   const { settings: st, cards, sections } = b;
   const real = sections.filter((s) => s.kind !== 'dashboard');
   const committed = cards.filter(countsTowardBudget);
-  const plan = sum(committed, 'estimate');
+  const planned = sum(committed, 'estimate');
   const paid = sum(cards, 'paid');
   const options = sum(cards.filter((c) => !countsTowardBudget(c)), 'estimate');
-  const base = st.budgetTotal || plan || 1;
+  const base = st.budgetTotal || planned || 1;
   const tile = (label, val, ...rest) => h('div', { class: 'tile' }, h('div', { class: 'tlabel' }, label), h('div', { class: 'tval' }, val), rest);
 
   const lead = h('div', { class: 'hlead' }, h('div', { class: 'hkicker' }, 'The wedding of'), h('div', { class: 'hnames' }, st.names || 'Our Wedding'));
@@ -286,19 +284,11 @@ function buildHero(b, narrow) {
 
   const tiles = [];
   // budget
-  const over = st.budgetTotal && plan > st.budgetTotal;
-  tiles.push(tile('Budget', st.budgetTotal ? formatINR(st.budgetTotal) : formatINR(plan),
-    h('div', { class: 'tbar' }, h('i', { class: 'soft', style: { width: `${Math.min(100, (plan / base) * 100)}%` } }), h('i', { class: 'hard', style: { width: `${Math.min(100, (paid / base) * 100)}%` } })),
-    h('div', { class: 'tsub' }, `${formatINR(plan)} planned · ${formatINR(paid)} paid`),
-    over ? h('div', { class: 'tsub alert' }, `Over by ${formatINR(plan - st.budgetTotal)}`) : options ? h('div', { class: 'tsub' }, `+ ${formatINR(options)} in ideas`) : null));
-
-  // where the money goes: one stacked bar in section colours
-  const rows = real.map((s) => ({ s, v: sum(committed.filter((c) => c.section === s.id), 'estimate') })).filter((r) => r.v > 0).sort((a, z) => z.v - a.v);
-  if (rows.length > 1) {
-    tiles.push(tile('Biggest spend', `${rows[0].s.emoji} ${formatINR(rows[0].v)}`,
-      h('div', { class: 'tbar' }, rows.map((r) => h('i', { title: `${r.s.title} ${formatINR(r.v)}`, style: { width: `${(r.v / plan) * 100}%`, background: r.s.color, filter: 'brightness(1.5) saturate(1.2)' } }))),
-      h('div', { class: 'tsub' }, rows.slice(0, 3).map((r) => r.s.title.split(/[ ,&]/)[0]).join(' · '))));
-  }
+  const over = st.budgetTotal && planned > st.budgetTotal;
+  tiles.push(tile('Budget', st.budgetTotal ? formatINR(st.budgetTotal) : formatINR(planned),
+    h('div', { class: 'tbar' }, h('i', { class: 'soft', style: { width: `${Math.min(100, (planned / base) * 100)}%` } }), h('i', { class: 'hard', style: { width: `${Math.min(100, (paid / base) * 100)}%` } })),
+    h('div', { class: 'tsub' }, `${formatINR(planned)} planned · ${formatINR(paid)} paid`),
+    over ? h('div', { class: 'tsub alert' }, `Over by ${formatINR(planned - st.budgetTotal)}`) : options ? h('div', { class: 'tsub' }, `+ ${formatINR(options)} in ideas`) : null));
 
   // guests
   const guestCards = cards.filter((c) => c.section === 'guests');
@@ -315,11 +305,21 @@ function buildHero(b, narrow) {
   tiles.push(tile('Next up', next ? next.title : '—', h('div', { class: 'tsub' }, next ? `${fmtDate(next.date)} · in ${daysUntil(next.date)} days` : 'No dates set yet'),
     undated ? h('div', { class: 'tsub' }, `${undated} function${undated > 1 ? 's' : ''} without a date`) : null));
 
-  // to-dos
-  const todos = cards.filter((c) => c.section === 'todo' || c.look === 'task');
-  if (todos.length) {
-    const done = todos.filter(isDone).length;
-    tiles.push(tile('To-dos', `${done} / ${todos.length}`, h('div', { class: 'tbar' }, h('i', { class: 'hard', style: { width: `${(done / todos.length) * 100}%` } })), h('div', { class: 'tsub' }, done === todos.length ? 'All done' : `${todos.length - done} still open`)));
+  // decisions
+  const stageN = (st2) => cards.filter((c) => c.stage === st2).length;
+  tiles.push(h('button', { class: 'tile', title: 'See what is open, parked and locked in', onclick: () => showPanel('decisions') },
+    h('div', { class: 'tlabel' }, 'Decisions'), h('div', { class: 'tval' }, `${stageN('locked')} locked in`),
+    h('div', { class: 'tsub' }, `${stageN('discuss')} to discuss · ${stageN('parked')} parked`)));
+
+  // the complete plan
+  const plan = b.plan || [];
+  if (plan.length) {
+    const done = plan.filter((x) => x.done).length;
+    const nextStep = plan.find((x) => !x.done);
+    tiles.push(h('button', { class: 'tile', title: 'Open the complete planning checklist', onclick: () => showPanel('plan') },
+      h('div', { class: 'tlabel' }, 'Complete plan'), h('div', { class: 'tval' }, `${done} / ${plan.length}`),
+      h('div', { class: 'tbar' }, h('i', { class: 'hard', style: { width: `${(done / plan.length) * 100}%` } })),
+      h('div', { class: 'tsub' }, nextStep ? `Next: ${nextStep.title.length > 44 ? nextStep.title.slice(0, 42) + '…' : nextStep.title}` : 'Everything is done')));
   }
 
   return h('div', { class: `hero${narrow ? ' narrow' : ''}` }, lead, h('div', { class: 'htiles' }, tiles),
@@ -332,8 +332,15 @@ function applySearch() {
     const node = S.cardNodes.get(card.id);
     if (!node) continue;
     const hay = [card.title, card.body, card.source, card.status, card.url, ...(card.tags || [])].join(' ').toLowerCase();
-    node.classList.toggle('dim', !!q && !hay.includes(q));
+    node.classList.toggle('dim', (!!q && !hay.includes(q)) || (!!S.filter && card.stage !== S.filter));
   }
+}
+function renderFilters() {
+  const n = (k) => S.board.cards.filter((c) => c.stage === k).length;
+  const any = Object.keys(STAGES).some(n);
+  const btn = (key, label) => h('button', { class: `fpill${S.filter === key ? ' on' : ''}${key ? ` s-${key}` : ''}`, onclick: () => { S.filter = S.filter === key ? null : key; renderFilters(); applySearch(); } }, label);
+  $('#filters').hidden = !any;
+  $('#filters').replaceChildren(btn(null, 'Everything'), ...Object.entries(STAGES).map(([k, v]) => btn(k, `${v} · ${n(k)}`)));
 }
 $('#search').addEventListener('input', (e) => { S.q = e.target.value; applySearch(); });
 $('#searchBtn').addEventListener('click', () => { document.body.classList.toggle('searching'); if (document.body.classList.contains('searching')) $('#search').focus(); });
@@ -659,7 +666,7 @@ function openEditor(id, sectionId) {
   const card = id ? S.board.cards.find((c) => c.id === id) : null;
   if (id && !card) return;
   const real = S.board.sections.filter((s) => s.kind !== 'dashboard');
-  const st = { img: card?.img ?? null, look: card?.look || (card ? 'card' : 'sticky'), featured: !!card?.featured, armed: false };
+  const st = { img: card?.img ?? null, look: LOOKS[card?.look] ? card.look : 'sticky', stage: card?.stage || null, featured: !!card?.featured, armed: false };
   const hasFacts = card && (card.estimate != null || card.paid != null || card.count != null || card.date || card.status || card.side || card.url || card.tags?.length);
   const f = {
     title: h('textarea', { class: 'etitle', rows: 1, placeholder: 'What is it?', maxLength: 200 }, card?.title ?? ''),
@@ -692,6 +699,8 @@ function openEditor(id, sectionId) {
         h('button', { type: 'button', class: 'btn', onclick: () => { st.img = null; draw(); } }, 'Remove photo')) : null,
     ].filter(Boolean));
     looksBox.replaceChildren(...[
+      h('div', { class: 'seg' }, h('button', { type: 'button', class: st.stage ? '' : 'on', onclick: () => { st.stage = null; draw(); } }, 'No label'),
+        Object.entries(STAGES).map(([k, v]) => h('button', { type: 'button', class: st.stage === k ? 'on' : '', onclick: () => { st.stage = k; draw(); } }, v))),
       st.img ? null : h('div', { class: 'seg' }, Object.entries(LOOKS).map(([k, v]) => h('button', { type: 'button', class: st.look === k ? 'on' : '', onclick: () => { st.look = k; draw(); } }, v))),
       h('div', { class: 'seg' }, h('button', { type: 'button', class: st.featured ? 'on' : '', title: 'Show this card double width', onclick: () => { st.featured = !st.featured; draw(); } }, st.featured ? '★ Featured' : '☆ Feature')),
       st.img ? null : h('button', { type: 'button', class: 'btn', onclick: () => fileIn.click() }, '📷 Add photo'),
@@ -721,7 +730,7 @@ function openEditor(id, sectionId) {
     const fields = {
       title: f.title.value.replace(/\s+/g, ' ').trim() || bodyText.split('\n')[0].slice(0, 70), body: bodyText || null, estimate: money(f.estimate), paid: money(f.paid), count: money(f.count),
       date: f.date.value || null, status: f.status.value.trim() || null, side: f.side.value || null, url: f.url.value.trim() || null,
-      tags: f.tags.value, img: st.img, look: st.img ? null : st.look, featured: st.featured,
+      tags: f.tags.value, img: st.img, look: st.img ? null : st.look, stage: st.stage, featured: st.featured,
     };
     if (bad.length) { more.open = true; bad[0].focus(); return; }
     if (!fields.title && !st.img) { f.title.classList.add('bad'); f.title.focus(); return; }
@@ -848,6 +857,18 @@ function say(text, busy = false) {
 }
 $('#status').addEventListener('click', () => { $('#status').hidden = true; });
 
+const chatVisible = () => !$('#panel').hidden && S.tab === 'chat';
+
+function setScope(id) {
+  S.scope = id && sectionOf(id) ? id : null;
+  const sec = S.scope ? sectionOf(S.scope) : null;
+  $('#scope').hidden = !sec;
+  if (sec) $('#scope').replaceChildren(h('span', {}, `Talking about ${sec.emoji} ${sec.title}`), h('button', { title: 'Back to the whole board', onclick: () => setScope(null) }, '✕'));
+  msg.placeholder = sec ? `About ${sec.title}…` : 'Ask or tell Claude…';
+  showPanel('chat');
+  msg.focus({ preventScroll: true });
+}
+
 async function send() {
   if (S.busy) return;
   const message = msg.value.trim();
@@ -856,35 +877,34 @@ async function send() {
   const attachments = S.attachments.splice(0);
   msg.value = ''; autosize(); $('#atts').replaceChildren();
 
-  // Thoughts and photos land on the board straight away and get sorted in the background.
-  // Questions, instructions, and a remark about several photos at once go to Claude as a conversation.
-  const converse = (message && ASKING.test(message)) || (message && attachments.length > 1);
-  if (!converse) { await capture({ text: message, images: attachments }); return; }
+  // photos with nothing said about them go straight onto the board and get sorted in the background
+  if (!message) { await capture({ images: attachments, section: S.scope || undefined }); return; }
 
+  // everything typed is a conversation: Claude answers, and puts things on the board when you tell it things
+  const section = S.scope || undefined;
   S.busy = true; $('#send').disabled = true;
-  say('Claude is on it…', true);
+  S.pendingMsg = { text: message, t: Date.now(), section };
+  showPanel('chat');
   try {
-    const r = await api('/api/chat', { message, attachments });
-    S.busy = false;
+    const r = await api('/api/chat', { message, attachments, section });
+    S.busy = false; S.pendingMsg = null;
     setBoard(r.board);
-    say(r.reply);
+    if (!chatVisible()) say(r.reply);
     if (r.added?.length) setTimeout(() => reveal(r.added[0]), 80);
   } catch (e) {
-    say('');
     toast(e.message, 'err');
     msg.value = message; autosize();
   } finally {
-    S.busy = false; $('#send').disabled = false;
+    S.busy = false; S.pendingMsg = null; $('#send').disabled = false;
+    renderPanel();
   }
 }
 
-// ---------------------------------------------------------------- side panel: journal + conversation
+// ---------------------------------------------------------------- side panel: chat, decisions, plan, journal
+function showPanel(tab) { S.tab = tab; $('#panel').hidden = false; renderPanel(); }
 function openPanel(tab) {
-  const panel = $('#panel');
-  if (!panel.hidden && S.tab === tab) { panel.hidden = true; return; }
-  S.tab = tab;
-  panel.hidden = false;
-  renderPanel();
+  if (!$('#panel').hidden && S.tab === tab) { $('#panel').hidden = true; return; }
+  showPanel(tab);
 }
 $('#journalBtn').addEventListener('click', () => openPanel('journal'));
 $('#chatBtn').addEventListener('click', () => openPanel('chat'));
@@ -894,7 +914,7 @@ for (const t of document.querySelectorAll('.tab')) t.addEventListener('click', (
 function renderPanel() {
   if ($('#panel').hidden || !S.board) return;
   for (const t of document.querySelectorAll('.tab')) t.classList.toggle('on', t.dataset.tab === S.tab);
-  if (S.tab === 'chat') renderChat(); else renderJournal();
+  ({ chat: renderChat, decisions: renderDecisions, plan: renderPlan, journal: renderJournal })[S.tab]();
 }
 
 function dayLabel(ts) {
@@ -913,7 +933,8 @@ function jump(id) {
   else go();
 }
 
-function journalRow(card, action) {
+/** One line for a card in the side panel. Clicking flies to the card unless `jumpable` is false. */
+function cardRow(card, actions = [], jumpable = true) {
   const sec = sectionOf(card.section);
   const look = lookOf(card);
   const time = new Date(card.deleted || card.created || Date.now()).toLocaleTimeString('en-IN', { hour: 'numeric', minute: '2-digit' });
@@ -923,8 +944,8 @@ function journalRow(card, action) {
     h('span', { class: 'jmain' }, h('span', { class: 'jt' }, card.title),
       orig ? h('span', { class: 'jsrc' }, `“${orig.replace(/\s+/g, ' ')}”`) : null,
       h('span', { class: 'js' }, `${sec ? `${sec.emoji} ${sec.title}` : 'Removed section'} · ${time}`)),
-    action || h('span', {}));
-  if (!action) row.addEventListener('click', () => jump(card.id));
+    h('span', { class: 'jacts' }, actions));
+  if (jumpable) row.addEventListener('click', (e) => { if (!e.target.closest('button')) jump(card.id); });
   return row;
 }
 
@@ -937,27 +958,96 @@ function renderJournal() {
   for (const c of cards) {
     const label = dayLabel(c.created || Date.now());
     if (label !== last) { out.push(h('div', { class: 'jday' }, label)); last = label; }
-    out.push(journalRow(c));
+    out.push(cardRow(c));
   }
   const trash = S.board.trash || [];
   if (trash.length) {
     out.push(h('div', { class: 'jday' }, 'Recently deleted'));
-    for (const c of trash.slice(0, 30)) out.push(journalRow(c, h('button', { class: 'jact', onclick: () => sendOps([{ op: 'restore_card', id: c.id }]).then(() => setTimeout(() => jump(c.id), 120)) }, 'Restore')));
+    for (const c of trash.slice(0, 30)) out.push(cardRow(c, [h('button', { class: 'jact', onclick: () => sendOps([{ op: 'restore_card', id: c.id }]).then(() => setTimeout(() => jump(c.id), 120)) }, 'Restore')], false));
     out.push(h('button', { class: 'link', onclick: () => sendOps([{ op: 'empty_trash' }]) }, 'Empty deleted items'));
   }
   body.replaceChildren(...out);
 }
 
+function renderDecisions() {
+  const setStage = (card, stage) => sendOps([{ op: 'update_card', id: card.id, patch: { stage } }]);
+  const act = (label, title, fn) => h('button', { class: 'jact', title, onclick: fn }, label);
+  const groups = [
+    ['discuss', 'To discuss', 'Nothing is waiting on a conversation.', (c) => [act('🔒', 'Lock it in', () => setStage(c, 'locked')), act('⏸', 'Park it', () => setStage(c, 'parked'))]],
+    ['parked', 'Parked for later', 'Nothing parked.', (c) => [act('💬', 'Bring it back for discussion', () => setStage(c, 'discuss')), act('🔒', 'Lock it in', () => setStage(c, 'locked'))]],
+    ['locked', 'Locked in', 'Nothing locked in yet.', (c) => [act('↺', 'Reopen for discussion', () => setStage(c, 'discuss'))]],
+  ];
+  const out = [h('div', { class: 'phint' }, 'Say “park the vintage car idea” or “the Taj is final” to Claude, or open any note and pick a label. Parked things are left out of the budget.')];
+  for (const [key, title, empty, actions] of groups) {
+    const cards = S.board.cards.filter((c) => c.stage === key);
+    out.push(h('div', { class: `jday s-${key}` }, `${title} · ${cards.length}`));
+    if (!cards.length) out.push(h('div', { class: 'pnone' }, empty));
+    for (const c of cards) out.push(cardRow(c, actions(c)));
+  }
+  const unlabelled = S.board.cards.filter((c) => !c.stage).length;
+  if (unlabelled) out.push(h('button', { class: 'link', onclick: () => { msg.value = 'Go through the notes that have no label and mark each as to discuss, parked or locked in where it is clear from what we wrote. Tell me which ones you were unsure about.'; autosize(); showPanel('chat'); msg.focus(); } }, `${unlabelled} notes have no label yet. Ask Claude to sort them`));
+  $('#panelBody').replaceChildren(...out);
+}
+
+function renderPlan() {
+  const plan = S.board.plan || [];
+  const phases = S.board.phases || [];
+  const wedding = S.board.settings.weddingDate ? new Date(S.board.settings.weddingDate + 'T00:00:00') : null;
+  const done = plan.filter((x) => x.done).length;
+  const firstOpen = phases.find((ph) => plan.some((x) => x.phase === ph.id && !x.done))?.id;
+  if (!S.planOpen) S.planOpen = new Set([firstOpen]);
+  const out = [h('div', { class: 'pprog' }, h('div', { class: 'pbig' }, `${done} of ${plan.length} done`), h('div', { class: 'bar2' }, h('i', { style: { width: `${plan.length ? (done / plan.length) * 100 : 0}%` } })),
+    h('div', { class: 'phint' }, wedding ? 'Everything a wedding needs, in the order it is usually done. Dates are worked back from your wedding day.' : 'Everything a wedding needs, in the order it is usually done. Set your wedding date to see when each part is due.'))];
+  for (const ph of phases) {
+    const items = plan.filter((x) => x.phase === ph.id);
+    const left = items.filter((x) => !x.done).length;
+    let due = ph.when;
+    let late = false;
+    if (wedding) {
+      const by = new Date(wedding.getTime() - ph.months * 30.44 * 86400000);
+      late = left > 0 && ph.months > 0 && by < new Date();
+      due = ph.months > 0.5 ? `${ph.when} · by ${by.toLocaleDateString('en-IN', { month: 'short', year: 'numeric' })}` : ph.when;
+    }
+    const addIn = h('input', { class: 'padd', placeholder: '+ Add your own step', maxLength: 160, onkeydown: (e) => { if (e.key === 'Enter' && e.target.value.trim()) { e.preventDefault(); sendOps([{ op: 'plan_add', item: { title: e.target.value.trim(), phase: ph.id } }]); } } });
+    const box = h('details', { class: `phase${late ? ' late' : ''}`, open: S.planOpen.has(ph.id), ontoggle: (e) => { if (e.target.open) S.planOpen.add(ph.id); else S.planOpen.delete(ph.id); } },
+      h('summary', {}, h('span', { class: 'pht' }, ph.title, h('small', {}, late ? `${due} · behind` : due)), h('span', { class: 'phn' }, left ? `${items.length - left}/${items.length}` : '✓')),
+      items.map((it) => {
+        const sec = it.section && sectionOf(it.section);
+        return h('div', { class: `pitem${it.done ? ' done' : ''}` },
+          h('button', { class: 'check', title: it.done ? 'Not done after all' : 'Done', onclick: () => sendOps([{ op: 'plan_set', id: it.id, done: !it.done }]) }, '✓'),
+          h('span', { class: 'ptxt' }, it.title, sec ? h('button', { class: 'psec', title: `Chat about this in ${sec.title}`, onclick: () => { setScope(sec.id); msg.value = `About "${it.title}": `; autosize(); } }, `${sec.emoji} ${sec.title}`) : null),
+          it.own ? h('button', { class: 'pdel', title: 'Remove this step', onclick: () => sendOps([{ op: 'plan_remove', id: it.id }]) }, '×') : null);
+      }), addIn);
+    out.push(box);
+  }
+  const body = $('#panelBody');
+  const y = body.scrollTop;
+  body.replaceChildren(...out);
+  body.scrollTop = y;
+}
+
 function renderChat() {
   const body = $('#panelBody');
-  const log = S.board?.chat || [];
-  if (!log.length) {
-    body.replaceChildren(h('div', { class: 'sugg' }, h('div', { class: 'jempty' }, 'Say it however it comes out. Claude files it, or answers.'),
-      EXAMPLES.map((t) => h('button', { onclick: () => { msg.value = t; autosize(); msg.focus(); } }, t))));
-    return;
+  const sec = S.scope ? sectionOf(S.scope) : null;
+  const log = (S.board?.chat || []).filter((m) => (sec ? m.section === sec.id : true));
+  const out = [];
+  if (sec) out.push(h('div', { class: 'scopebar', style: { '--c': sec.color } }, h('span', {}, `${sec.emoji} ${sec.title}`), h('button', { class: 'jact', onclick: () => setScope(null) }, 'Whole board')));
+  if (!log.length && !S.pendingMsg) {
+    const ex = sec ? [`What is still open in ${sec.title}?`, `Give me ideas for ${sec.title}`, `What should we decide first here?`] : EXAMPLES;
+    out.push(h('div', { class: 'sugg' }, h('div', { class: 'jempty' }, sec ? `Ask anything about ${sec.title}, or tell Claude what you have decided.` : 'Ask anything, think out loud, or tell Claude what you have decided. It answers here and keeps the board up to date.'),
+      ex.map((t) => h('button', { onclick: () => { msg.value = t; autosize(); msg.focus(); } }, t))));
   }
-  body.replaceChildren(...log.map((m) => h('div', { class: `msg ${m.role}` }, (m.images || []).map((u) => h('img', { src: u, alt: '' })), m.text)),
-    h('button', { class: 'link', onclick: async () => setBoard((await api('/api/chat/clear', {})).board) }, 'Clear conversation'));
+  for (const m of log) {
+    const other = !sec && m.section && sectionOf(m.section);
+    out.push(h('div', { class: `msg ${m.role}` }, other ? h('small', { class: 'mwhere' }, `${other.emoji} ${other.title}`) : null, (m.images || []).map((u) => h('img', { src: u, alt: '' })), m.text));
+  }
+  const p = S.pendingMsg;
+  if (p && (p.section || null) === (sec?.id || null)) {
+    if (!log.some((m) => m.role === 'user' && m.text === p.text && m.t >= p.t - 3000)) out.push(h('div', { class: 'msg user' }, p.text));
+    out.push(h('div', { class: 'msg assistant typing' }, h('i', {}), h('i', {}), h('i', {})));
+  }
+  if (log.length) out.push(h('button', { class: 'link', onclick: async () => setBoard((await api('/api/chat/clear', { section: sec?.id })).board) }, 'Clear this conversation'));
+  body.replaceChildren(...out);
   body.scrollTop = body.scrollHeight;
 }
 

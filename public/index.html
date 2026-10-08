@@ -35,10 +35,11 @@
     </header>
 
     <main id="vp"><div id="world"></div></main>
+    <div id="filters" hidden></div>
 
     <aside id="panel" hidden>
       <div class="panel-head">
-        <div class="tabs"><button data-tab="journal" class="tab">Journal</button><button data-tab="chat" class="tab">Claude</button></div>
+        <div class="tabs"><button data-tab="chat" class="tab">Claude</button><button data-tab="decisions" class="tab">Decisions</button><button data-tab="plan" class="tab">Plan</button><button data-tab="journal" class="tab">Journal</button></div>
         <button id="panelClose" class="tbtn">✕</button>
       </div>
       <div id="panelBody"></div>
@@ -46,12 +47,13 @@
 
     <footer id="composer">
       <div id="status" hidden></div>
+      <div id="scope" hidden></div>
       <div id="atts"></div>
       <div class="row">
-        <button id="chatBtn" class="cbtn" title="Conversation with Claude">💬</button>
+        <button id="chatBtn" class="cbtn" title="Open the conversation with Claude">💬</button>
         <button id="attBtn" class="cbtn" title="Add photos">📎</button>
-        <textarea id="msg" rows="1" enterkeyhint="send" placeholder="Drop a thought, or paste a photo…"></textarea>
-        <button id="send" class="cbtn primary" title="Add to board">➤</button>
+        <textarea id="msg" rows="1" enterkeyhint="send" placeholder="Ask or tell Claude…"></textarea>
+        <button id="send" class="cbtn primary" title="Send">➤</button>
       </div>
       <input type="file" id="file" accept="image/*" multiple hidden>
     </footer>

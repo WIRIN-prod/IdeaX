@@ -181,3 +181,37 @@ test('order_section reorders one section and leaves others alone', () => {
   assert.deepEqual(board.cards.filter((c) => c.section === 'x').map((c) => c.title), ['c', 'a', 'b']);
   assert.deepEqual(board.cards.filter((c) => c.section === 'y').map((c) => c.title), ['m']);
 });
+
+test('decision stage: set, clear, and parked is left out of the budget', async () => {
+  const { countsTowardBudget } = await import('../public/shared.js');
+  const s = new Store(tmp());
+  s.apply([{ op: 'add_card', card: { section: 'venues', title: 'Vintage car entry', estimate: '1 lakh', stage: 'parked' } }, { op: 'add_card', card: { section: 'venues', title: 'Taj', stage: 'nonsense' } }]);
+  const car = s.data.cards.find((c) => c.title === 'Vintage car entry');
+  assert.equal(car.stage, 'parked');
+  assert.equal(countsTowardBudget(car), false);
+  assert.equal(s.data.cards.find((c) => c.title === 'Taj').stage, undefined);
+  s.apply([{ op: 'update_card', id: car.id, patch: { stage: 'locked' } }]);
+  assert.equal(countsTowardBudget(car), true);
+  s.apply([{ op: 'update_card', id: car.id, patch: { stage: null } }]);
+  assert.equal(car.stage, undefined);
+});
+
+test('planning checklist: seeded, tickable, extendable, and added to older boards', () => {
+  const dir = tmp();
+  const s = new Store(dir);
+  assert.ok(s.data.plan.length > 60);
+  const first = s.data.plan[0];
+  s.apply([{ op: 'plan_set', id: first.id, done: true }, { op: 'plan_add', item: { title: 'Book the dhol wale', phase: 'p6' } }, { op: 'plan_set', id: 'nope', done: true }]);
+  assert.ok(first.done);
+  const own = s.data.plan.find((x) => x.title === 'Book the dhol wale');
+  assert.ok(own.own && own.phase === 'p6');
+  s.apply([{ op: 'plan_remove', id: own.id }]);
+  assert.ok(!s.data.plan.some((x) => x.id === own.id));
+  assert.ok(s.undo() && s.data.plan.some((x) => x.id === own.id), 'plan changes are undoable');
+  // a board saved before the checklist existed gets one on load, keeping everything else
+  const old = JSON.parse(fs.readFileSync(path.join(dir, 'board.json'), 'utf8'));
+  delete old.plan; delete old.trash;
+  fs.writeFileSync(path.join(dir, 'board.json'), JSON.stringify(old));
+  const again = new Store(dir);
+  assert.ok(again.data.plan.length > 60 && again.data.cards.length === old.cards.length);
+});

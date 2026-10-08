@@ -64,7 +64,7 @@ app.post('/api/undo', ...jsonOnly, needJson, (req, res) => {
 });
 
 app.post('/api/chat/clear', ...jsonOnly, needJson, (req, res) => {
-  store.clearChat();
+  store.clearChat(typeof req.body?.section === 'string' ? req.body.section : undefined);
   res.json({ board: store.view() });
 });
 
@@ -97,13 +97,17 @@ app.post('/api/chat', ...jsonOnly, needJson, (req, res) => {
   const message = typeof req.body?.message === 'string' ? req.body.message.trim().slice(0, 4000) : '';
   const attachments = cleanAttachments(req.body?.attachments);
   if (!message && !attachments.length) return res.status(400).json({ error: 'Say something or attach a photo' });
+  // a conversation can be held inside one section; its thread and context are then scoped to it
+  const focus = store.data.sections.find((x) => x.kind !== 'dashboard' && x.id === req.body?.section) || null;
+  const section = focus?.id;
 
   enqueue(async () => {
-    store.addChat({ role: 'user', text: message, images: attachments.map((a) => a.url) });
+    const history = store.data.chat.filter((m) => (m.section || null) === (section || null)).slice(-10).map((m) => ({ role: m.role, text: m.text }));
+    store.addChat({ role: 'user', text: message, images: attachments.map((a) => a.url), section });
     let plan;
     let note = '';
     try {
-      plan = await planWithClaude({ ...claudeOpts(), message, attachments });
+      plan = await planWithClaude({ ...claudeOpts(), message, attachments, history, focus, web: !process.env.WB_NO_WEB });
     } catch (e) {
       console.error('[claude]', e.message);
       plan = fallbackPlan(message, attachments);
@@ -112,7 +116,7 @@ app.post('/api/chat', ...jsonOnly, needJson, (req, res) => {
     const { applied, errors } = store.apply(plan.ops, { attachments });
     if (errors.length) console.warn('[ops]', errors.join('; '));
     const added = applied.filter((a) => a.op === 'add_card').map((a) => a.id);
-    store.addChat({ role: 'assistant', text: plan.reply + note, added });
+    store.addChat({ role: 'assistant', text: plan.reply + note, added, section });
     return { reply: plan.reply + note, added, board: store.view() };
   }).then((r) => res.json(r)).catch((e) => res.status(500).json({ error: e.message }));
 });
