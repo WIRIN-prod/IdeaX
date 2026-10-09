@@ -23,7 +23,7 @@ app.disable('x-powered-by');
 const extraHosts = (process.env.ALLOWED_HOSTS || '').split(',').map((s) => s.trim().toLowerCase()).filter(Boolean);
 app.use((req, res, next) => {
   const host = (req.headers.host || '').toLowerCase().replace(/:\d+$/, '').replace(/^\[|\]$/g, '');
-  const ok = host === 'localhost' || host.endsWith('.local') || /^\d{1,3}(\.\d{1,3}){3}$/.test(host) || host.includes(':') || extraHosts.includes(host);
+  const ok = host === 'localhost' || !host.includes('.') || host.endsWith('.local') || host.endsWith('.ts.net') || /^\d{1,3}(\.\d{1,3}){3}$/.test(host) || host.includes(':') || extraHosts.includes(host);
   if (!ok) return res.status(421).send('Unknown host. Set ALLOWED_HOSTS=<name> to allow it.');
   next();
 });
