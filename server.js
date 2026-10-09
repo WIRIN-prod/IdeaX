@@ -190,8 +190,13 @@ app.listen(PORT, HOST, () => {
   const docker = (ip) => /^172\.(1[6-9]|2\d|3[01])\./.test(ip); // container bridges: not reachable from a phone
   const lan = all.filter((ip) => !docker(ip)).length ? all.filter((ip) => !docker(ip)) : all;
   console.log(`\n  Wedding board is running${PIN ? ' (PIN protected)' : ''}\n`);
-  console.log(`  This computer : http://localhost:${PORT}`);
-  for (const ip of lan) console.log(`  Phone / tablet: http://${ip}:${PORT}   (same Wi-Fi)`);
+  if (process.env.PUBLISHED_PORT) {
+    // inside a container our own addresses mean nothing to the outside world
+    console.log(`  In a container. Open http://<this machine's address>:${process.env.PUBLISHED_PORT}`);
+  } else {
+    console.log(`  This computer : http://localhost:${PORT}`);
+    for (const ip of lan) console.log(`  Phone / tablet: http://${ip}:${PORT}   (same Wi-Fi)`);
+  }
   if (!PIN) console.log('\n  Anyone on your Wi-Fi can open this. Set BOARD_PIN=1234 to require a PIN.');
   console.log('');
 });

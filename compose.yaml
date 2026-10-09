@@ -1,0 +1,21 @@
+# Wedding Board as a container.  Start: docker compose up -d   Rebuild after code changes: docker compose up -d --build
+services:
+  wedding-board:
+    build: .
+    image: wedding-board:latest
+    container_name: wedding-board
+    restart: unless-stopped
+    # run as the host user, so the board file, photos and Claude login keep their owner
+    user: "${PUID:-1000}:${PGID:-1000}"
+    ports:
+      - "${BOARD_PORT:-18001}:3000"
+    environment:
+      PUBLISHED_PORT: "${BOARD_PORT:-18001}"
+      BOARD_PIN: "${BOARD_PIN:-}"
+      WB_MODEL: "${WB_MODEL:-sonnet}"
+      ALLOWED_HOSTS: "${ALLOWED_HOSTS:-}"
+      TZ: "${TZ:-Asia/Kolkata}"
+    volumes:
+      - ./data:/app/data          # the board, conversations, plan, backups
+      - ./uploads:/app/uploads    # photos
+      - "${CLAUDE_HOME:-${HOME}/.claude}:/claude"   # your Claude login, shared with the host

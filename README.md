@@ -6,29 +6,44 @@ Runs **on your own computer**. Open it from your laptop browser and from your ph
 
 ## Run it
 
+### With Docker (recommended)
+
+```bash
+docker compose up -d            # build the image and start it on port 18001
+docker compose up -d --build    # rebuild after changing the code
+docker compose logs -f          # watch it
+docker compose down             # stop it (your data stays in ./data and ./uploads)
+```
+
+Then open `http://<this machine's address>:18001` from your laptop or phones (same Wi-Fi). Share → *Add to Home Screen* makes it feel like an app. Everyone sees the same board, and edits appear live on all devices.
+
+The container restarts by itself after a crash or reboot. Three folders are mounted into it:
+
+| Host | In the container | What |
+|---|---|---|
+| `./data` | `/app/data` | the board, conversations, plan, daily backups |
+| `./uploads` | `/app/uploads` | photos |
+| `~/.claude` | `/claude` | your Claude login, so the chat uses your subscription |
+
+Run `claude` once on the host to log in before starting. The container runs as your own user (uid 1000 by default; set `PUID`/`PGID` if yours differs), so those files keep their owner. Settings go in a `.env` file next to `compose.yaml`, for example `BOARD_PIN=2468` or `BOARD_PORT=8080`.
+
+### Without Docker
+
 ```bash
 npm install
-npm start
+npm start       # prints the address to open; default port 3000
 ```
-
-The terminal prints two addresses:
-
-```
-This computer : http://localhost:3000
-Phone / tablet: http://192.168.1.6:3000   (same Wi-Fi)
-```
-
-Open the second one on your phone (Share → *Add to Home Screen* makes it feel like an app). Everyone with the link sees the same board, and edits appear live on all devices.
 
 Optional settings (environment variables):
 
 | Variable | Meaning |
 |---|---|
-| `PORT` | default `3000` |
+| `PORT` | default `3000` (with Docker use `BOARD_PORT` instead, default `18001`) |
 | `BOARD_PIN` | require this PIN before anyone can open the board, e.g. `BOARD_PIN=2468 npm start` |
 | `HOST` | `127.0.0.1` to allow only this computer (default `0.0.0.0` = whole Wi-Fi) |
 | `ALLOWED_HOSTS` | extra hostnames to accept, e.g. a Tailscale name (`my-pc.tail1234.ts.net`) |
 | `WB_MODEL` | Claude model for the chat (default `sonnet`) |
+| `CLAUDE_HOME` | Docker only: folder holding your Claude login (default `~/.claude`) |
 | `WB_NO_WEB` | set to `1` to stop Claude searching the web in conversation |
 | `WB_DATA_DIR`, `WB_UPLOADS_DIR` | where `board.json` and photos live (default `./data`, `./uploads`) |
 
@@ -51,7 +66,7 @@ It is a moodboard, not a form. Dump things on it however they come out and Claud
 
 ## How the Claude part works
 
-The server runs the `claude` CLI headlessly (`claude -p`) with your existing Claude subscription login. No API key is needed, and a stray `ANTHROPIC_API_KEY` is ignored on purpose. Install Claude Code and run `claude` once to log in. Claude gets a compact JSON view of the board plus what you dropped and replies with validated operations (add/update/move/reorder cards, set budget…). Its only tools are reading the photos you attach and, in conversation, web search (turn that off with `WB_NO_WEB=1`). If Claude is unavailable, what you dropped simply stays in the Inspiration Inbox as you wrote it, so nothing is lost.
+The server runs the `claude` CLI headlessly (`claude -p`) with your existing Claude subscription login (the Docker image has the CLI built in and borrows the login from the host). No API key is needed, and a stray `ANTHROPIC_API_KEY` is ignored on purpose. Install Claude Code and run `claude` once to log in. Claude gets a compact JSON view of the board plus what you dropped and replies with validated operations (add/update/move/reorder cards, set budget…). Its only tools are reading the photos you attach and, in conversation, web search (turn that off with `WB_NO_WEB=1`). If Claude is unavailable, what you dropped simply stays in the Inspiration Inbox as you wrote it, so nothing is lost.
 
 ## Your data
 
