@@ -299,7 +299,7 @@ function renderFilters() {
   const n = (k) => S.board.cards.filter((c) => c.stage === k).length;
   const any = Object.keys(STAGES).some(n);
   const btn = (key, label) => h('button', { class: `fpill${S.filter === key ? ' on' : ''}${key ? ` s-${key}` : ''}`, onclick: () => { S.filter = S.filter === key ? null : key; renderFilters(); applySearch(); } }, label);
-  $('#filters').hidden = !any;
+  $('#filters').hidden = !any; document.body.classList.toggle('has-filters', any);
   $('#filters').replaceChildren(btn(null, 'Everything'), ...Object.entries(STAGES).map(([k, v]) => btn(k, `${v} · ${n(k)}`)));
 }
 $('#search').addEventListener('input', (e) => { S.q = e.target.value; applySearch(); });
