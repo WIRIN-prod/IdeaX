@@ -1,7 +1,7 @@
 {
-  "name": "wedding-board",
+  "name": "ideax",
   "version": "0.1.0",
-  "description": "A shared, auto-arranging wedding planning canvas with a Claude-powered chat box. Runs locally; open from any device on your Wi-Fi.",
+  "description": "A shared, auto-arranging idea board. An agent powered by a LiteLLM proxy key turns what you type into filed post-it notes.",
   "type": "module",
   "private": true,
   "license": "MIT",

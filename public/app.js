@@ -9,19 +9,19 @@ const LOOKS = { sticky: 'Note', quote: 'Quote', task: 'To-do' };
 const GLYPH = { sticky: '✎', quote: '❝', task: '☑', photo: '▣' };
 const STAGES = { discuss: '💬 To discuss', parked: '⏸ Parked', locked: '🔒 Locked in' };
 const EXAMPLES = [
-  'mom wants marigolds everywhere, I want pastel. need to find a middle',
-  'Booked Taj Falaknuma for the Sangeet, ₹12 lakh, 2 lakh advance paid',
-  "Sharma family from Delhi, 18 people, bride's side, all functions",
-  'Ideas for a mandap in marigold and pink?',
+  'What if onboarding was a 30-second video instead of a form?',
+  'Landing page should feel calm, lots of whitespace. need to decide on the hero image',
+  'Competitor X just dropped their price. read: https://example.com/pricing',
+  'Give me ideas for a launch campaign',
   'What is still pending discussion?',
-  'What should we be doing this month?',
+  'What should we work on next?',
 ];
 const S = {
   board: null, rev: 0, view: { x: 0, y: 0, k: 1 }, profile: null, lay: null, heights: {}, tilt: {},
   cardNodes: new Map(), frameNodes: new Map(), sigs: new Map(), hero: null, slot: null,
   ptrs: new Map(), mode: null, pending: null, drag: null, last: null, pinch: null,
   q: '', attachments: [], busy: false, fresh: new Set(), dirty: false, pasteHook: null, animOn: false,
-  tab: 'chat', lastChat: 0, scope: null, filter: null, pendingMsg: null, planOpen: null,
+  tab: 'chat', lastChat: 0, scope: null, filter: null, pendingMsg: null, 
 };
 
 // ---------------------------------------------------------------- API
@@ -77,9 +77,9 @@ function setBoard(b) {
   renderPanel();
   $('#undo').disabled = !b.canUndo;
   const names = b.settings.names;
-  $('#title').textContent = names || 'Wedding Board';
-  document.title = names ? `${names} · Wedding Board` : 'Wedding Board';
-  // surface what Claude says after sorting things in the background
+  $('#title').textContent = names || 'IdeaX';
+  document.title = names ? `${names} · IdeaX` : 'IdeaX';
+  // surface what the agent says after sorting things in the background
   const lastA = [...(b.chat || [])].reverse().find((m) => m.role === 'assistant');
   if (lastA && lastA.t > S.lastChat) { if (!first && !S.busy && !chatVisible()) say(lastA.text); S.lastChat = lastA.t; }
   renderFilters();
@@ -211,7 +211,7 @@ function frameHead(sec, mine) {
       onclick: () => (mine.length ? sendOps([{ op: 'update_section', id: sec.id, section: { collapsed: !sec.collapsed } }]) : openEditor(null, sec.id)) },
     sec.title, mine.length ? h('span', { class: 'fcount' }, mine.length) : null),
     est ? h('span', { class: 'fsum' }, formatINR(est)) : null,
-    h('button', { class: 'ficon', title: `Chat with Claude about ${sec.title}`, onclick: () => setScope(sec.id) }, '💬'),
+    h('button', { class: 'ficon', title: `Chat with the agent about ${sec.title}`, onclick: () => setScope(sec.id) }, '💬'),
     h('button', { class: 'ficon', title: 'Add a note here', onclick: () => openEditor(null, sec.id) }, '+'),
     h('button', { class: 'ficon', title: 'Section settings', onclick: () => openSection(sec.id) }, '⋯'));
 }
@@ -267,63 +267,23 @@ function cardContent(card, look) {
 
 function buildHero(b, narrow) {
   const { settings: st, cards, sections } = b;
-  const real = sections.filter((s) => s.kind !== 'dashboard');
-  const committed = cards.filter(countsTowardBudget);
-  const planned = sum(committed, 'estimate');
-  const paid = sum(cards, 'paid');
-  const options = sum(cards.filter((c) => !countsTowardBudget(c)), 'estimate');
-  const base = st.budgetTotal || planned || 1;
   const tile = (label, val, ...rest) => h('div', { class: 'tile' }, h('div', { class: 'tlabel' }, label), h('div', { class: 'tval' }, val), rest);
-
-  const lead = h('div', { class: 'hlead' }, h('div', { class: 'hkicker' }, 'The wedding of'), h('div', { class: 'hnames' }, st.names || 'Our Wedding'));
-  if (st.weddingDate) {
-    const d = daysUntil(st.weddingDate);
-    lead.append(h('div', { class: 'hdate' }, new Date(st.weddingDate + 'T00:00:00').toLocaleDateString('en-IN', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })),
-      h('div', { class: 'hcount' }, d > 0 ? [h('b', {}, d), h('span', {}, d === 1 ? 'day to go' : 'days to go')] : d === 0 ? h('b', {}, 'Today 🎉') : [h('b', {}, -d), h('span', {}, 'days married ❤️')]));
-  } else lead.append(h('button', { class: 'hbtn', onclick: openSettings }, 'Set your names, date & budget'));
+  const lead = h('div', { class: 'hlead' }, h('div', { class: 'hkicker' }, 'Idea board'), h('div', { class: 'hnames' }, st.names || 'IdeaX'));
+  if (!st.names) lead.append(h('button', { class: 'hbtn', onclick: openSettings }, 'Name your board'));
 
   const tiles = [];
-  // budget
-  const over = st.budgetTotal && planned > st.budgetTotal;
-  tiles.push(tile('Budget', st.budgetTotal ? formatINR(st.budgetTotal) : formatINR(planned),
-    h('div', { class: 'tbar' }, h('i', { class: 'soft', style: { width: `${Math.min(100, (planned / base) * 100)}%` } }), h('i', { class: 'hard', style: { width: `${Math.min(100, (paid / base) * 100)}%` } })),
-    h('div', { class: 'tsub' }, `${formatINR(planned)} planned · ${formatINR(paid)} paid`),
-    over ? h('div', { class: 'tsub alert' }, `Over by ${formatINR(planned - st.budgetTotal)}`) : options ? h('div', { class: 'tsub' }, `+ ${formatINR(options)} in ideas`) : null));
-
-  // guests
-  const guestCards = cards.filter((c) => c.section === 'guests');
-  const heads = sum(guestCards, 'count');
-  const by = (side) => sum(guestCards.filter((c) => c.side === side), 'count');
-  tiles.push(tile('Guests', st.guestTarget ? `${heads} / ${st.guestTarget}` : String(heads),
-    st.guestTarget ? h('div', { class: 'tbar' }, h('i', { class: 'hard', style: { width: `${Math.min(100, (heads / st.guestTarget) * 100)}%` } })) : null,
-    h('div', { class: 'tsub' }, heads ? `Bride ${by('bride')} · Groom ${by('groom')}${by('both') ? ` · Both ${by('both')}` : ''}` : 'No one on the list yet')));
-
-  // next function
-  const events = cards.filter((c) => c.section === 'events');
-  const next = events.filter((c) => c.date && daysUntil(c.date) >= 0).sort((a, z) => a.date.localeCompare(z.date))[0];
-  const undated = events.filter((c) => !c.date).length;
-  tiles.push(tile('Next up', next ? next.title : '—', h('div', { class: 'tsub' }, next ? `${fmtDate(next.date)} · in ${daysUntil(next.date)} days` : 'No dates set yet'),
-    undated ? h('div', { class: 'tsub' }, `${undated} function${undated > 1 ? 's' : ''} without a date`) : null));
-
-  // decisions
+  const inbox = cards.filter((c) => c.section === 'ideas').length;
+  tiles.push(tile('Notes', String(cards.length), h('div', { class: 'tsub' }, `${sections.filter((s) => s.kind !== 'dashboard').length} sections`),
+    inbox ? h('div', { class: 'tsub' }, `${inbox} in the inbox`) : null));
   const stageN = (st2) => cards.filter((c) => c.stage === st2).length;
   tiles.push(h('button', { class: 'tile', title: 'See what is open, parked and locked in', onclick: () => showPanel('decisions') },
     h('div', { class: 'tlabel' }, 'Decisions'), h('div', { class: 'tval' }, `${stageN('locked')} locked in`),
     h('div', { class: 'tsub' }, `${stageN('discuss')} to discuss · ${stageN('parked')} parked`)));
-
-  // the complete plan
-  const plan = b.plan || [];
-  if (plan.length) {
-    const done = plan.filter((x) => x.done).length;
-    const nextStep = plan.find((x) => !x.done);
-    tiles.push(h('button', { class: 'tile', title: 'Open the complete planning checklist', onclick: () => showPanel('plan') },
-      h('div', { class: 'tlabel' }, 'Complete plan'), h('div', { class: 'tval' }, `${done} / ${plan.length}`),
-      h('div', { class: 'tbar' }, h('i', { class: 'hard', style: { width: `${(done / plan.length) * 100}%` } })),
-      h('div', { class: 'tsub' }, nextStep ? `Next: ${nextStep.title.length > 44 ? nextStep.title.slice(0, 42) + '…' : nextStep.title}` : 'Everything is done')));
-  }
+  const open = cards.filter((c) => c.look === 'task' && c.status !== 'done').length;
+  tiles.push(tile('To-dos', String(open), h('div', { class: 'tsub' }, open ? 'still open' : 'all clear')));
 
   return h('div', { class: `hero${narrow ? ' narrow' : ''}` }, lead, h('div', { class: 'htiles' }, tiles),
-    h('button', { class: 'hedit', title: 'Edit names, date and budget', onclick: openSettings }, '✎'));
+    h('button', { class: 'hedit', title: 'Rename the board', onclick: openSettings }, '✎'));
 }
 
 function applySearch() {
@@ -589,7 +549,7 @@ async function uploadImage(file) {
   return { url: j.url, w, h: hh };
 }
 
-/** Put something on the board right now; Claude tidies and files it in the background. */
+/** Put something on the board right now; the agent tidies and files it in the background. */
 async function capture(payload) {
   try {
     const r = await api('/api/capture', payload);
@@ -646,7 +606,7 @@ document.addEventListener('drop', (e) => {
   if (!files.length) return;
   e.preventDefault();
   if (S.pasteHook) return S.pasteHook(files);
-  captureImages(files, sectionAt(toWorld(e.clientX, e.clientY), S.lay)?.id); // dropped on a section = a hint for Claude
+  captureImages(files, sectionAt(toWorld(e.clientX, e.clientY), S.lay)?.id); // dropped on a section = a hint for the agent
 });
 
 // ---------------------------------------------------------------- dialogs
@@ -678,7 +638,7 @@ function openEditor(id, sectionId) {
     date: h('input', { type: 'date', value: card?.date ?? '' }),
     status: h('input', { value: card?.status ?? '', list: 'statuses', placeholder: 'idea, booked…' }),
     side: h('select', {}, h('option', { value: '' }, '—'), Object.entries(SIDES).map(([k, v]) => h('option', { value: k, selected: card?.side === k }, v))),
-    tags: h('input', { value: (card?.tags || []).join(', '), placeholder: 'Mehendi, Sangeet…' }),
+    tags: h('input', { value: (card?.tags || []).join(', '), placeholder: 'Launch, Mobile…' }),
     url: h('input', { value: card?.url ?? '', placeholder: 'https://…', inputMode: 'url' }),
   };
   const grow = () => { f.body.style.height = 'auto'; f.body.style.height = Math.min(320, f.body.scrollHeight + 2) + 'px'; };
@@ -763,7 +723,7 @@ function openSection(id) {
   const sec = id ? sectionOf(id) : null;
   let color = sec?.color ?? SWATCHES[S.board.sections.length % SWATCHES.length];
   let armed = false;
-  const title = h('input', { value: sec?.title ?? '', placeholder: 'e.g. Honeymoon plans', required: true, maxLength: 60 });
+  const title = h('input', { value: sec?.title ?? '', placeholder: 'e.g. Pricing', required: true, maxLength: 60 });
   const emoji = h('input', { value: sec?.emoji ?? '📌', maxLength: 8, style: { width: '80px' } });
   const sw = h('div', { class: 'swatches' });
   const drawSw = () => sw.replaceChildren(...SWATCHES.map((c) => h('button', { type: 'button', class: `sw ${c === color ? 'on' : ''}`, style: { background: c }, onclick: () => { color = c; drawSw(); } })));
@@ -795,25 +755,13 @@ function openSection(id) {
 $('#addSec').addEventListener('click', () => openSection(null));
 
 function openSettings() {
-  const st = S.board.settings;
-  const f = {
-    names: h('input', { value: st.names, placeholder: 'e.g. Anika & Rohan', maxLength: 80 }),
-    date: h('input', { type: 'date', value: st.weddingDate ?? '' }),
-    budget: h('input', { value: moneyText(st.budgetTotal), placeholder: 'e.g. 40 lakh or 1.2 cr' }),
-    guests: h('input', { value: moneyText(st.guestTarget), placeholder: 'e.g. 400', inputMode: 'numeric' }),
-  };
+  const name = h('input', { value: S.board.settings.names, placeholder: 'e.g. Project Atlas', maxLength: 80 });
   const form = h('form', { method: 'dialog', onsubmit: async (e) => {
     e.preventDefault();
-    const b = f.budget.value.trim() ? parseAmount(f.budget.value) : null;
-    const g = f.guests.value.trim() ? parseAmount(f.guests.value) : null;
-    if (b === undefined) { f.budget.classList.add('bad'); return; }
-    if (g === undefined) { f.guests.classList.add('bad'); return; }
     dlg.close();
-    await sendOps([{ op: 'set_settings', settings: { names: f.names.value.trim(), weddingDate: f.date.value || null, budgetTotal: b, guestTarget: g } }]);
+    await sendOps([{ op: 'set_settings', settings: { names: name.value.trim() } }]);
   } },
-  h('h3', {}, 'Our wedding'),
-  field('Names', f.names), field('Wedding date', f.date),
-  h('div', { class: 'grid2' }, field('Total budget ₹', f.budget), field('Guest target', f.guests)),
+  h('h3', {}, 'Your board'), field('Name', name),
   h('div', { class: 'actions' }, h('span', { class: 'spacer' }),
     h('button', { type: 'button', class: 'btn', onclick: () => dlg.close() }, 'Cancel'), h('button', { class: 'btn primary' }, 'Save')));
   const dlg = dialog(form);
@@ -828,7 +776,7 @@ $('#arrange').addEventListener('click', async () => {
   if (S.busy) return;
   S.busy = true;
   $('#arrange').classList.add('busy');
-  say('Claude is looking over the whole board and tidying it…', true);
+  say('The agent is looking over the whole board and tidying it…', true);
   try {
     const r = await api('/api/arrange', {});
     S.busy = false;
@@ -864,7 +812,7 @@ function setScope(id) {
   const sec = S.scope ? sectionOf(S.scope) : null;
   $('#scope').hidden = !sec;
   if (sec) $('#scope').replaceChildren(h('span', {}, `Talking about ${sec.emoji} ${sec.title}`), h('button', { title: 'Back to the whole board', onclick: () => setScope(null) }, '✕'));
-  msg.placeholder = sec ? `About ${sec.title}…` : 'Ask or tell Claude…';
+  msg.placeholder = sec ? `About ${sec.title}…` : 'Ask the agent or jot an idea…';
   showPanel('chat');
   msg.focus({ preventScroll: true });
 }
@@ -880,7 +828,7 @@ async function send() {
   // photos with nothing said about them go straight onto the board and get sorted in the background
   if (!message) { await capture({ images: attachments, section: S.scope || undefined }); return; }
 
-  // everything typed is a conversation: Claude answers, and puts things on the board when you tell it things
+  // everything typed is a conversation: the agent answers, and puts things on the board when you tell it things
   const section = S.scope || undefined;
   S.busy = true; $('#send').disabled = true;
   S.pendingMsg = { text: message, t: Date.now(), section };
@@ -900,7 +848,7 @@ async function send() {
   }
 }
 
-// ---------------------------------------------------------------- side panel: chat, decisions, plan, journal
+// ---------------------------------------------------------------- side panel: chat, decisions, journal
 function showPanel(tab) { S.tab = tab; $('#panel').hidden = false; renderPanel(); }
 function openPanel(tab) {
   if (!$('#panel').hidden && S.tab === tab) { $('#panel').hidden = true; return; }
@@ -914,7 +862,7 @@ for (const t of document.querySelectorAll('.tab')) t.addEventListener('click', (
 function renderPanel() {
   if ($('#panel').hidden || !S.board) return;
   for (const t of document.querySelectorAll('.tab')) t.classList.toggle('on', t.dataset.tab === S.tab);
-  ({ chat: renderChat, decisions: renderDecisions, plan: renderPlan, journal: renderJournal })[S.tab]();
+  ({ chat: renderChat, decisions: renderDecisions, journal: renderJournal })[S.tab]();
 }
 
 function dayLabel(ts) {
@@ -977,7 +925,7 @@ function renderDecisions() {
     ['parked', 'Parked for later', 'Nothing parked.', (c) => [act('💬', 'Bring it back for discussion', () => setStage(c, 'discuss')), act('🔒', 'Lock it in', () => setStage(c, 'locked'))]],
     ['locked', 'Locked in', 'Nothing locked in yet.', (c) => [act('↺', 'Reopen for discussion', () => setStage(c, 'discuss'))]],
   ];
-  const out = [h('div', { class: 'phint' }, 'Say “park the vintage car idea” or “the Taj is final” to Claude, or open any note and pick a label. Parked things are left out of the budget.')];
+  const out = [h('div', { class: 'phint' }, 'Say “park the dark-mode idea” or “the new logo is final” to the agent, or open any note and pick a label.')];
   for (const [key, title, empty, actions] of groups) {
     const cards = S.board.cards.filter((c) => c.stage === key);
     out.push(h('div', { class: `jday s-${key}` }, `${title} · ${cards.length}`));
@@ -985,45 +933,8 @@ function renderDecisions() {
     for (const c of cards) out.push(cardRow(c, actions(c)));
   }
   const unlabelled = S.board.cards.filter((c) => !c.stage).length;
-  if (unlabelled) out.push(h('button', { class: 'link', onclick: () => { msg.value = 'Go through the notes that have no label and mark each as to discuss, parked or locked in where it is clear from what we wrote. Tell me which ones you were unsure about.'; autosize(); showPanel('chat'); msg.focus(); } }, `${unlabelled} notes have no label yet. Ask Claude to sort them`));
+  if (unlabelled) out.push(h('button', { class: 'link', onclick: () => { msg.value = 'Go through the notes that have no label and mark each as to discuss, parked or locked in where it is clear from what we wrote. Tell me which ones you were unsure about.'; autosize(); showPanel('chat'); msg.focus(); } }, `${unlabelled} notes have no label yet. Ask the agent to sort them`));
   $('#panelBody').replaceChildren(...out);
-}
-
-function renderPlan() {
-  const plan = S.board.plan || [];
-  const phases = S.board.phases || [];
-  const wedding = S.board.settings.weddingDate ? new Date(S.board.settings.weddingDate + 'T00:00:00') : null;
-  const done = plan.filter((x) => x.done).length;
-  const firstOpen = phases.find((ph) => plan.some((x) => x.phase === ph.id && !x.done))?.id;
-  if (!S.planOpen) S.planOpen = new Set([firstOpen]);
-  const out = [h('div', { class: 'pprog' }, h('div', { class: 'pbig' }, `${done} of ${plan.length} done`), h('div', { class: 'bar2' }, h('i', { style: { width: `${plan.length ? (done / plan.length) * 100 : 0}%` } })),
-    h('div', { class: 'phint' }, wedding ? 'Everything a wedding needs, in the order it is usually done. Dates are worked back from your wedding day.' : 'Everything a wedding needs, in the order it is usually done. Set your wedding date to see when each part is due.'))];
-  for (const ph of phases) {
-    const items = plan.filter((x) => x.phase === ph.id);
-    const left = items.filter((x) => !x.done).length;
-    let due = ph.when;
-    let late = false;
-    if (wedding) {
-      const by = new Date(wedding.getTime() - ph.months * 30.44 * 86400000);
-      late = left > 0 && ph.months > 0 && by < new Date();
-      due = ph.months > 0.5 ? `${ph.when} · by ${by.toLocaleDateString('en-IN', { month: 'short', year: 'numeric' })}` : ph.when;
-    }
-    const addIn = h('input', { class: 'padd', placeholder: '+ Add your own step', maxLength: 160, onkeydown: (e) => { if (e.key === 'Enter' && e.target.value.trim()) { e.preventDefault(); sendOps([{ op: 'plan_add', item: { title: e.target.value.trim(), phase: ph.id } }]); } } });
-    const box = h('details', { class: `phase${late ? ' late' : ''}`, open: S.planOpen.has(ph.id), ontoggle: (e) => { if (e.target.open) S.planOpen.add(ph.id); else S.planOpen.delete(ph.id); } },
-      h('summary', {}, h('span', { class: 'pht' }, ph.title, h('small', {}, late ? `${due} · behind` : due)), h('span', { class: 'phn' }, left ? `${items.length - left}/${items.length}` : '✓')),
-      items.map((it) => {
-        const sec = it.section && sectionOf(it.section);
-        return h('div', { class: `pitem${it.done ? ' done' : ''}` },
-          h('button', { class: 'check', title: it.done ? 'Not done after all' : 'Done', onclick: () => sendOps([{ op: 'plan_set', id: it.id, done: !it.done }]) }, '✓'),
-          h('span', { class: 'ptxt' }, it.title, sec ? h('button', { class: 'psec', title: `Chat about this in ${sec.title}`, onclick: () => { setScope(sec.id); msg.value = `About "${it.title}": `; autosize(); } }, `${sec.emoji} ${sec.title}`) : null),
-          it.own ? h('button', { class: 'pdel', title: 'Remove this step', onclick: () => sendOps([{ op: 'plan_remove', id: it.id }]) }, '×') : null);
-      }), addIn);
-    out.push(box);
-  }
-  const body = $('#panelBody');
-  const y = body.scrollTop;
-  body.replaceChildren(...out);
-  body.scrollTop = y;
 }
 
 function renderChat() {
@@ -1034,7 +945,7 @@ function renderChat() {
   if (sec) out.push(h('div', { class: 'scopebar', style: { '--c': sec.color } }, h('span', {}, `${sec.emoji} ${sec.title}`), h('button', { class: 'jact', onclick: () => setScope(null) }, 'Whole board')));
   if (!log.length && !S.pendingMsg) {
     const ex = sec ? [`What is still open in ${sec.title}?`, `Give me ideas for ${sec.title}`, `What should we decide first here?`] : EXAMPLES;
-    out.push(h('div', { class: 'sugg' }, h('div', { class: 'jempty' }, sec ? `Ask anything about ${sec.title}, or tell Claude what you have decided.` : 'Ask anything, think out loud, or tell Claude what you have decided. It answers here and keeps the board up to date.'),
+    out.push(h('div', { class: 'sugg' }, h('div', { class: 'jempty' }, sec ? `Ask anything about ${sec.title}, or tell the agent what you have decided.` : 'Ask anything, think out loud, or tell the agent what you have decided. It answers here and keeps the board up to date.'),
       ex.map((t) => h('button', { onclick: () => { msg.value = t; autosize(); msg.focus(); } }, t))));
   }
   for (const m of log) {

@@ -6,7 +6,7 @@
   <meta name="theme-color" content="#120b10">
   <meta name="mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-capable" content="yes">
-  <title>Wedding Board</title>
+  <title>IdeaX</title>
   <link rel="manifest" href="/manifest.webmanifest">
   <link rel="icon" href="/icon.svg" type="image/svg+xml">
   <link rel="apple-touch-icon" href="/icon.svg">
@@ -20,11 +20,11 @@
 <body>
   <div id="app" hidden>
     <header id="top">
-      <div class="brand"><span class="logo">🪔</span><b id="title">Wedding Board</b></div>
+      <div class="brand"><span class="logo">💡</span><b id="title">IdeaX</b></div>
       <input id="search" type="search" placeholder="Search everything…" autocomplete="off">
       <div class="tools">
         <button id="searchBtn" class="tbtn only-small" title="Search">🔍</button>
-        <button id="arrange" class="tbtn gold" title="Let Claude tidy and re-arrange the whole board">✨<span class="hide-small"> Arrange</span></button>
+        <button id="arrange" class="tbtn gold" title="Let the agent tidy and re-arrange the whole board">✨<span class="hide-small"> Arrange</span></button>
         <button id="journalBtn" class="tbtn" title="Journal: everything you added, newest first">🕘<span class="hide-small"> Journal</span></button>
         <button id="undo" class="tbtn" title="Undo last change" disabled>↶</button>
         <button id="addSec" class="tbtn" title="Add a section">+<span class="hide-small"> Section</span></button>
@@ -39,7 +39,7 @@
 
     <aside id="panel" hidden>
       <div class="panel-head">
-        <div class="tabs"><button data-tab="chat" class="tab">Claude</button><button data-tab="decisions" class="tab">Decisions</button><button data-tab="plan" class="tab">Plan</button><button data-tab="journal" class="tab">Journal</button></div>
+        <div class="tabs"><button data-tab="chat" class="tab">Agent</button><button data-tab="decisions" class="tab">Decisions</button><button data-tab="journal" class="tab">Journal</button></div>
         <button id="panelClose" class="tbtn">✕</button>
       </div>
       <div id="panelBody"></div>
@@ -50,9 +50,9 @@
       <div id="scope" hidden></div>
       <div id="atts"></div>
       <div class="row">
-        <button id="chatBtn" class="cbtn" title="Open the conversation with Claude">💬</button>
+        <button id="chatBtn" class="cbtn" title="Open the conversation with the agent">💬</button>
         <button id="attBtn" class="cbtn" title="Add photos">📎</button>
-        <textarea id="msg" rows="1" enterkeyhint="send" placeholder="Ask or tell Claude…"></textarea>
+        <textarea id="msg" rows="1" enterkeyhint="send" placeholder="Ask the agent or jot an idea…"></textarea>
         <button id="send" class="cbtn primary" title="Send">➤</button>
       </div>
       <input type="file" id="file" accept="image/*" multiple hidden>
@@ -61,8 +61,8 @@
 
   <div id="lock" hidden>
     <form id="lockForm">
-      <div class="logo big">🪔</div>
-      <h2>Wedding Board</h2>
+      <div class="logo big">💡</div>
+      <h2>IdeaX</h2>
       <input id="pin" type="password" inputmode="numeric" autocomplete="current-password" placeholder="PIN" autofocus>
       <button class="primary">Unlock</button>
       <p id="lockErr"></p>

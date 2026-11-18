@@ -1,21 +1,24 @@
-# Wedding Board as a container.  Start: docker compose up -d   Rebuild after code changes: docker compose up -d --build
+# IdeaX as a container.  Start: docker compose up -d   Rebuild after code changes: docker compose up -d --build
 services:
-  wedding-board:
+  ideax:
     build: .
-    image: wedding-board:latest
-    container_name: wedding-board
+    image: ideax:latest
+    container_name: ideax
     restart: unless-stopped
-    # run as the host user, so the board file, photos and Claude login keep their owner
+    # run as the host user, so the board file, photos keep their owner
     user: "${PUID:-1000}:${PGID:-1000}"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     ports:
       - "${BOARD_PORT:-18001}:3000"
     environment:
       PUBLISHED_PORT: "${BOARD_PORT:-18001}"
       BOARD_PIN: "${BOARD_PIN:-}"
-      WB_MODEL: "${WB_MODEL:-sonnet}"
+      LITELLM_BASE_URL: "${LITELLM_BASE_URL:-http://host.docker.internal:4000}"
+      LITELLM_API_KEY: "${LITELLM_API_KEY:?set LITELLM_API_KEY in .env}"
+      LITELLM_MODEL: "${LITELLM_MODEL:-gpt-4o}"
       ALLOWED_HOSTS: "${ALLOWED_HOSTS:-}"
       TZ: "${TZ:-Asia/Kolkata}"
     volumes:
-      - ./data:/app/data          # the board, conversations, plan, backups
+      - ./data:/app/data          # the board, conversations, backups
       - ./uploads:/app/uploads    # photos
-      - "${CLAUDE_HOME:-${HOME}/.claude}:/claude"   # your Claude login, shared with the host

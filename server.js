@@ -5,7 +5,7 @@ import os from 'node:os';
 import crypto from 'node:crypto';
 import { fileURLToPath } from 'node:url';
 import { Store } from './lib/store.js';
-import { planWithClaude, fallbackPlan, captureBrief, ARRANGE_BRIEF } from './lib/claude.js';
+import { planWithAgent, fallbackPlan, captureBrief, ARRANGE_BRIEF } from './lib/llm.js';
 
 const ROOT = path.dirname(fileURLToPath(import.meta.url));
 const PORT = +process.env.PORT || 3000;
@@ -84,10 +84,10 @@ app.post('/api/upload', guard, express.raw({ type: () => true, limit: '25mb' }),
   res.json({ url: `/uploads/${name}` });
 });
 
-// --- Claude work: one call at a time ---
+// --- LLM work: one call at a time ---
 let queue = Promise.resolve();
 const enqueue = (fn) => { const job = queue.then(fn); queue = job.catch(() => {}); return job; };
-const claudeOpts = () => ({ data: store.view(), uploadsDir: UPLOADS, scratchDir: path.join(DATA_DIR, 'claude-cwd') });
+const llmOpts = () => ({ data: store.view(), uploadsDir: UPLOADS });
 const cleanAttachments = (list) => (Array.isArray(list) ? list : [])
   .filter((a) => /^\/uploads\/[\w-]+\.(jpg|png|webp|gif)$/.test(a?.url || '') && fs.existsSync(path.join(UPLOADS, path.basename(a.url))))
   .slice(0, 8)
@@ -107,9 +107,9 @@ app.post('/api/chat', ...jsonOnly, needJson, (req, res) => {
     let plan;
     let note = '';
     try {
-      plan = await planWithClaude({ ...claudeOpts(), message, attachments, history, focus, web: !process.env.WB_NO_WEB });
+      plan = await planWithAgent({ ...llmOpts(), message, attachments, history, focus });
     } catch (e) {
-      console.error('[claude]', e.message);
+      console.error('[llm]', e.message);
       plan = fallbackPlan(message, attachments);
       note = ` (${e.message})`;
     }
@@ -121,7 +121,7 @@ app.post('/api/chat', ...jsonOnly, needJson, (req, res) => {
   }).then((r) => res.json(r)).catch((e) => res.status(500).json({ error: e.message }));
 });
 
-// --- capture: things appear on the board instantly, Claude sorts them in the background ---
+// --- capture: things appear on the board instantly, the agent sorts them in the background ---
 let sorting = false;
 async function sortCaptures() {
   if (sorting) return;
@@ -133,13 +133,13 @@ async function sortCaptures() {
         if (!batch.length) return;
         const ids = batch.map((c) => c.id);
         try {
-          const plan = await planWithClaude({ ...claudeOpts(), message: captureBrief(batch), attachments: batch.filter((c) => c.img).map((c) => c.img) });
+          const plan = await planWithAgent({ ...llmOpts(), message: captureBrief(batch), attachments: batch.filter((c) => c.img).map((c) => c.img) });
           store.settle(ids, { silent: true });
           const { errors } = store.apply(plan.ops);
           if (errors.length) console.warn('[ops]', errors.join('; '));
           store.addChat({ role: 'assistant', text: plan.reply, added: ids });
         } catch (e) {
-          console.error('[claude]', e.message);
+          console.error('[llm]', e.message);
         } finally {
           store.settle(ids);
         }
@@ -161,12 +161,12 @@ app.post('/api/capture', ...jsonOnly, needJson, (req, res) => {
 
 app.post('/api/arrange', ...jsonOnly, needJson, (req, res) => {
   enqueue(async () => {
-    const plan = await planWithClaude({ ...claudeOpts(), message: ARRANGE_BRIEF });
+    const plan = await planWithAgent({ ...llmOpts(), message: ARRANGE_BRIEF });
     const { applied, errors } = store.apply(plan.ops);
     if (errors.length) console.warn('[ops]', errors.join('; '));
     store.addChat({ role: 'assistant', text: plan.reply });
     return { reply: plan.reply, changed: applied.length, board: store.view() };
-  }).then((r) => res.json(r)).catch((e) => res.status(502).json({ error: `Claude could not tidy the board: ${e.message}` }));
+  }).then((r) => res.json(r)).catch((e) => res.status(502).json({ error: `The agent could not tidy the board: ${e.message}` }));
 });
 
 // --- live sync to every open device ---
@@ -189,7 +189,7 @@ app.listen(PORT, HOST, () => {
   const all = Object.values(os.networkInterfaces()).flat().filter((i) => i && i.family === 'IPv4' && !i.internal).map((i) => i.address);
   const docker = (ip) => /^172\.(1[6-9]|2\d|3[01])\./.test(ip); // container bridges: not reachable from a phone
   const lan = all.filter((ip) => !docker(ip)).length ? all.filter((ip) => !docker(ip)) : all;
-  console.log(`\n  Wedding board is running${PIN ? ' (PIN protected)' : ''}\n`);
+  console.log(`\n  Idea board is running${PIN ? ' (PIN protected)' : ''}\n`);
   if (process.env.PUBLISHED_PORT) {
     // inside a container our own addresses mean nothing to the outside world
     console.log(`  In a container. Open http://<this machine's address>:${process.env.PUBLISHED_PORT}`);

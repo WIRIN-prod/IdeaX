@@ -6,7 +6,7 @@ import path from 'node:path';
 import { parseAmount, formatINR, daysUntil } from '../public/shared.js';
 import { layout, pickProfile, insertionIndex, CARD_W } from '../public/layout.js';
 import { Store, applyOps } from '../lib/store.js';
-import { fallbackPlan } from '../lib/claude.js';
+import { fallbackPlan } from '../lib/llm.js';
 
 test('parseAmount handles Indian shorthand', () => {
   assert.equal(parseAmount('5 lakh'), 500000);
@@ -79,32 +79,32 @@ const tmp = () => fs.mkdtempSync(path.join(os.tmpdir(), 'wb-'));
 test('store seeds, applies ops, undoes, and persists', () => {
   const dir = tmp();
   const s = new Store(dir);
-  assert.ok(s.data.cards.some((c) => c.title === 'Mehendi'));
+  assert.ok(s.data.sections.some((x) => x.id === 'product'));
   const r = s.apply([
-    { op: 'add_card', card: { section: 'Venues', title: 'Taj Falaknuma', estimate: '12 lakh', count: 250, tags: 'Sangeet, Pheras', status: 'booked', side: 'both', date: '2027-02-14' } },
+    { op: 'add_card', card: { section: 'Product', title: 'Dark mode', estimate: '12 lakh', count: 250, tags: 'Mobile, UI', status: 'planned', date: '2027-02-14' } },
     { op: 'add_card', card: { section: 'nope', title: 'Orphan' } },
-    { op: 'add_card', card: { section: 'venues' } },
+    { op: 'add_card', card: { section: 'product' } },
     { op: 'bogus' },
   ]);
   assert.equal(r.applied.length, 2);
   assert.equal(r.errors.length, 2);
-  const v = s.data.cards.find((c) => c.title === 'Taj Falaknuma');
-  assert.equal(v.section, 'venues');
+  const v = s.data.cards.find((c) => c.title === 'Dark mode');
+  assert.equal(v.section, 'product');
   assert.equal(v.estimate, 1200000);
-  assert.deepEqual(v.tags, ['Sangeet', 'Pheras']);
+  assert.deepEqual(v.tags, ['Mobile', 'UI']);
   assert.equal(s.data.cards.find((c) => c.title === 'Orphan').section, 'ideas', 'unknown section lands in the inbox');
 
-  s.apply([{ op: 'update_card', id: v.id, patch: { paid: '2 lakh', status: null, section: 'vendors' } }]);
+  s.apply([{ op: 'update_card', id: v.id, patch: { paid: '2 lakh', status: null, section: 'design' } }]);
   const u = s.data.cards.find((c) => c.id === v.id);
   assert.equal(u.paid, 200000);
   assert.equal(u.status, undefined);
-  assert.equal(u.section, 'vendors');
+  assert.equal(u.section, 'design');
 
   assert.ok(s.undo());
-  assert.equal(s.data.cards.find((c) => c.id === v.id).section, 'venues');
+  assert.equal(s.data.cards.find((c) => c.id === v.id).section, 'product');
 
   const again = new Store(dir);
-  assert.ok(again.data.cards.some((c) => c.title === 'Taj Falaknuma'), 'persisted to disk');
+  assert.ok(again.data.cards.some((c) => c.title === 'Dark mode'), 'persisted to disk');
 });
 
 test('move_card places at the requested index within a section', () => {
@@ -119,10 +119,10 @@ test('move_card places at the requested index within a section', () => {
 });
 
 test('images must be our own uploads; attachments resolve by index', () => {
-  const board = { sections: [{ id: 'outfits', title: 'Outfits' }], cards: [], settings: {} };
+  const board = { sections: [{ id: 'design', title: 'Design' }], cards: [], settings: {} };
   applyOps(board, [
-    { op: 'add_card', card: { section: 'outfits', title: 'Bad', img: { url: 'http://evil.example/x.png' } } },
-    { op: 'add_card', card: { section: 'outfits', title: 'Peach lehenga', attachment: 0 } },
+    { op: 'add_card', card: { section: 'design', title: 'Bad', img: { url: 'http://evil.example/x.png' } } },
+    { op: 'add_card', card: { section: 'design', title: 'Peach logo', attachment: 0 } },
   ], { attachments: [{ url: '/uploads/abc-123.jpg', w: 900, h: 1200 }] });
   assert.equal(board.cards[0].img, undefined);
   assert.deepEqual(board.cards[1].img, { url: '/uploads/abc-123.jpg', w: 900, h: 1200 });
@@ -130,29 +130,29 @@ test('images must be our own uploads; attachments resolve by index', () => {
 
 test('deleting a section moves its cards to the inbox', () => {
   const s = new Store(tmp());
-  const n = s.data.cards.filter((c) => c.section === 'events').length;
-  s.apply([{ op: 'delete_section', id: 'events' }]);
-  assert.ok(!s.data.sections.some((x) => x.id === 'events'));
+  s.apply([{ op: 'add_card', card: { section: 'research', title: 'Paper' } }]);
+  const n = 1;
+  s.apply([{ op: 'delete_section', id: 'research' }]);
+  assert.ok(!s.data.sections.some((x) => x.id === 'research'));
   assert.equal(s.data.cards.filter((c) => c.section === 'ideas').length, n);
   s.apply([{ op: 'delete_section', id: 'overview' }]);
   assert.ok(s.data.sections.some((x) => x.id === 'overview'), 'dashboard cannot be deleted');
 });
 
-test('fallback routes by keyword and extracts amounts', () => {
-  const p = fallbackPlan('Found a lehenga at Frontier Raas for 8 lakh');
-  assert.equal(p.ops[0].card.section, 'outfits');
-  assert.equal(p.ops[0].card.estimate, 800000);
+test('fallback routes by keyword', () => {
+  const p = fallbackPlan('New logo and brand colours');
+  assert.equal(p.ops[0].card.section, 'design');
   assert.equal(fallbackPlan('', [{ url: '/uploads/a.jpg' }]).ops[0].card.attachment, 0);
 });
 
 test('deleted cards go to the trash and can be restored', () => {
   const s = new Store(tmp());
-  const id = s.data.cards.find((c) => c.title === 'Haldi').id;
+  const id = s.apply([{ op: 'add_card', card: { section: 'product', title: 'Haldi' } }]).applied[0].id;
   s.apply([{ op: 'delete_card', id }]);
   assert.ok(!s.data.cards.some((c) => c.id === id));
   assert.equal(s.data.trash[0].id, id);
   s.apply([{ op: 'restore_card', id }]);
-  assert.equal(s.data.cards.find((c) => c.id === id).section, 'events');
+  assert.equal(s.data.cards.find((c) => c.id === id).section, 'product');
   assert.equal(s.data.trash.length, 0);
 });
 
@@ -166,9 +166,9 @@ test('raw captures appear at once, keep the original words, and settle', () => {
   assert.equal(note.source, long);
   assert.equal(note.look, 'sticky');
   assert.ok(note.pending && photo.pending && photo.img);
-  s.apply([{ op: 'update_card', id: note.id, patch: { title: 'Marigold vs pastel', section: 'decor', look: 'quote', colors: ['#F4A300', 'nope'], featured: true } }]);
+  s.apply([{ op: 'update_card', id: note.id, patch: { title: 'Marigold vs pastel', section: 'design', look: 'quote', colors: ['#F4A300', 'nope'], featured: true } }]);
   assert.equal(note.source, long, 'original text survives being organised');
-  assert.deepEqual([note.section, note.look, note.featured, note.colors], ['decor', 'quote', true, ['#F4A300']]);
+  assert.deepEqual([note.section, note.look, note.featured, note.colors], ['design', 'quote', true, ['#F4A300']]);
   s.settle(ids);
   assert.ok(!s.data.cards.some((c) => c.pending));
 });
@@ -185,7 +185,7 @@ test('order_section reorders one section and leaves others alone', () => {
 test('decision stage: set, clear, and parked is left out of the budget', async () => {
   const { countsTowardBudget } = await import('../public/shared.js');
   const s = new Store(tmp());
-  s.apply([{ op: 'add_card', card: { section: 'venues', title: 'Vintage car entry', estimate: '1 lakh', stage: 'parked' } }, { op: 'add_card', card: { section: 'venues', title: 'Taj', stage: 'nonsense' } }]);
+  s.apply([{ op: 'add_card', card: { section: 'product', title: 'Vintage car entry', estimate: '1 lakh', stage: 'parked' } }, { op: 'add_card', card: { section: 'product', title: 'Taj', stage: 'nonsense' } }]);
   const car = s.data.cards.find((c) => c.title === 'Vintage car entry');
   assert.equal(car.stage, 'parked');
   assert.equal(countsTowardBudget(car), false);
@@ -196,22 +196,3 @@ test('decision stage: set, clear, and parked is left out of the budget', async (
   assert.equal(car.stage, undefined);
 });
 
-test('planning checklist: seeded, tickable, extendable, and added to older boards', () => {
-  const dir = tmp();
-  const s = new Store(dir);
-  assert.ok(s.data.plan.length > 60);
-  const first = s.data.plan[0];
-  s.apply([{ op: 'plan_set', id: first.id, done: true }, { op: 'plan_add', item: { title: 'Book the dhol wale', phase: 'p6' } }, { op: 'plan_set', id: 'nope', done: true }]);
-  assert.ok(first.done);
-  const own = s.data.plan.find((x) => x.title === 'Book the dhol wale');
-  assert.ok(own.own && own.phase === 'p6');
-  s.apply([{ op: 'plan_remove', id: own.id }]);
-  assert.ok(!s.data.plan.some((x) => x.id === own.id));
-  assert.ok(s.undo() && s.data.plan.some((x) => x.id === own.id), 'plan changes are undoable');
-  // a board saved before the checklist existed gets one on load, keeping everything else
-  const old = JSON.parse(fs.readFileSync(path.join(dir, 'board.json'), 'utf8'));
-  delete old.plan; delete old.trash;
-  fs.writeFileSync(path.join(dir, 'board.json'), JSON.stringify(old));
-  const again = new Store(dir);
-  assert.ok(again.data.plan.length > 60 && again.data.cards.length === old.cards.length);
-});
