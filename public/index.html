@@ -14,13 +14,12 @@
     // set the theme before first paint
     document.documentElement.dataset.theme = localStorage.getItem('wb-theme') || (matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark');
   </script>
-  <link rel="stylesheet" href="/fonts/fonts.css">
   <link rel="stylesheet" href="/style.css">
 </head>
 <body>
   <div id="app" hidden>
     <header id="top">
-      <div class="brand"><span class="logo">💡</span><b id="title">IdeaX</b></div>
+      <div class="brand"><span class="logo"></span><b id="title">IdeaX</b></div>
       <input id="search" type="search" placeholder="Search everything…" autocomplete="off">
       <div class="tools">
         <button id="searchBtn" class="tbtn only-small" title="Search">🔍</button>
@@ -52,7 +51,7 @@
       <div class="row">
         <button id="chatBtn" class="cbtn" title="Open the conversation with the agent">💬</button>
         <button id="attBtn" class="cbtn" title="Add photos">📎</button>
-        <textarea id="msg" rows="1" enterkeyhint="send" placeholder="Ask the agent or jot an idea…"></textarea>
+        <textarea id="msg" rows="1" enterkeyhint="send" placeholder="Capture an idea or ask the agent…"></textarea>
         <button id="send" class="cbtn primary" title="Send">➤</button>
       </div>
       <input type="file" id="file" accept="image/*" multiple hidden>

@@ -14,7 +14,7 @@ The agent runs through a **LiteLLM proxy** with an ordinary LiteLLM key (no Clau
 
 - Type, paste a link or drop a photo: the agent files it as a post-it in the right section
 - Ask the agent questions about the board, or have it tidy everything (**Arrange**)
-- Decision stages (to discuss / parked / locked in), journal, search, undo, dark mode
+- Decision stages (under review / on hold / approved), journal, search, undo, dark mode
 - Works on phones and tablets; optional PIN; all data stays in local files
 
 ## Run it

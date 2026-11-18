@@ -7,13 +7,13 @@ const world = $('#world');
 const SWATCHES = ['#D98E04', '#C2185B', '#00796B', '#3949AB', '#E8590C', '#6B8E23', '#8E2432', '#7B4EA3', '#0B7285', '#B8860B'];
 const LOOKS = { sticky: 'Note', quote: 'Quote', task: 'To-do' };
 const GLYPH = { sticky: '✎', quote: '❝', task: '☑', photo: '▣' };
-const STAGES = { discuss: '💬 To discuss', parked: '⏸ Parked', locked: '🔒 Locked in' };
+const STAGES = { discuss: 'Under review', parked: 'On hold', locked: 'Approved' };
 const EXAMPLES = [
   'What if onboarding was a 30-second video instead of a form?',
   'Landing page should feel calm, lots of whitespace. need to decide on the hero image',
   'Competitor X just dropped their price. read: https://example.com/pricing',
   'Give me ideas for a launch campaign',
-  'What is still pending discussion?',
+  'What is still under review?',
   'What should we work on next?',
 ];
 const S = {
@@ -129,7 +129,7 @@ function render() {
     node.style.setProperty('--c', sec.color);
     node.className = ['card', look === 'photo' ? 'look-photo' : `note v-${look}`, card.stage && `st-${card.stage}`, card.featured && 'wide', card.pending && 'pending', sec.collapsed && 'folded', isDone(card) && 'done',
       S.drag?.id === card.id && 'dragging'].filter(Boolean).join(' ');
-    S.tilt[card.id] = (((hsh >> 3) % 27) / 26 - 0.5) * 2.6;
+    S.tilt[card.id] = 0;
     const sig = JSON.stringify(card);
     if (S.sigs.get(card.id) !== sig) { S.sigs.set(card.id, sig); node.replaceChildren(...cardContent(card, look)); }
     if (S.fresh.has(card.id)) { node.classList.add('fresh'); setTimeout(() => node.classList.remove('fresh'), 1700); }
@@ -276,9 +276,9 @@ function buildHero(b, narrow) {
   tiles.push(tile('Notes', String(cards.length), h('div', { class: 'tsub' }, `${sections.filter((s) => s.kind !== 'dashboard').length} sections`),
     inbox ? h('div', { class: 'tsub' }, `${inbox} in the inbox`) : null));
   const stageN = (st2) => cards.filter((c) => c.stage === st2).length;
-  tiles.push(h('button', { class: 'tile', title: 'See what is open, parked and locked in', onclick: () => showPanel('decisions') },
-    h('div', { class: 'tlabel' }, 'Decisions'), h('div', { class: 'tval' }, `${stageN('locked')} locked in`),
-    h('div', { class: 'tsub' }, `${stageN('discuss')} to discuss · ${stageN('parked')} parked`)));
+  tiles.push(h('button', { class: 'tile', title: 'See what is under review, on hold and approved', onclick: () => showPanel('decisions') },
+    h('div', { class: 'tlabel' }, 'Decisions'), h('div', { class: 'tval' }, `${stageN('locked')} approved`),
+    h('div', { class: 'tsub' }, `${stageN('discuss')} under review · ${stageN('parked')} on hold`)));
   const open = cards.filter((c) => c.look === 'task' && c.status !== 'done').length;
   tiles.push(tile('To-dos', String(open), h('div', { class: 'tsub' }, open ? 'still open' : 'all clear')));
 
@@ -476,7 +476,7 @@ function dragMove(cx, cy) {
   if (!d) return;
   d.px = cx; d.py = cy;
   const w = toWorld(cx, cy);
-  S.cardNodes.get(d.id).style.transform = `translate(${w.x - d.gx}px, ${w.y - d.gy}px) rotate(2deg)`;
+  S.cardNodes.get(d.id).style.transform = `translate(${w.x - d.gx}px, ${w.y - d.gy}px)`;
   const sec = sectionAt(w, d.base);
   if (sec) {
     const ids = cardIdsBySection({ id: d.id, section: null })[sec.id];
@@ -812,7 +812,7 @@ function setScope(id) {
   const sec = S.scope ? sectionOf(S.scope) : null;
   $('#scope').hidden = !sec;
   if (sec) $('#scope').replaceChildren(h('span', {}, `Talking about ${sec.emoji} ${sec.title}`), h('button', { title: 'Back to the whole board', onclick: () => setScope(null) }, '✕'));
-  msg.placeholder = sec ? `About ${sec.title}…` : 'Ask the agent or jot an idea…';
+  msg.placeholder = sec ? `About ${sec.title}…` : 'Capture an idea or ask the agent…';
   showPanel('chat');
   msg.focus({ preventScroll: true });
 }
@@ -921,9 +921,9 @@ function renderDecisions() {
   const setStage = (card, stage) => sendOps([{ op: 'update_card', id: card.id, patch: { stage } }]);
   const act = (label, title, fn) => h('button', { class: 'jact', title, onclick: fn }, label);
   const groups = [
-    ['discuss', 'To discuss', 'Nothing is waiting on a conversation.', (c) => [act('🔒', 'Lock it in', () => setStage(c, 'locked')), act('⏸', 'Park it', () => setStage(c, 'parked'))]],
-    ['parked', 'Parked for later', 'Nothing parked.', (c) => [act('💬', 'Bring it back for discussion', () => setStage(c, 'discuss')), act('🔒', 'Lock it in', () => setStage(c, 'locked'))]],
-    ['locked', 'Locked in', 'Nothing locked in yet.', (c) => [act('↺', 'Reopen for discussion', () => setStage(c, 'discuss'))]],
+    ['discuss', 'Under review', 'Nothing is waiting for review.', (c) => [act('🔒', 'Approve', () => setStage(c, 'locked')), act('⏸', 'Put on hold', () => setStage(c, 'parked'))]],
+    ['parked', 'On hold', 'Nothing is on hold.', (c) => [act('💬', 'Send back to review', () => setStage(c, 'discuss')), act('🔒', 'Approve', () => setStage(c, 'locked'))]],
+    ['locked', 'Approved', 'Nothing approved yet.', (c) => [act('↺', 'Reopen for review', () => setStage(c, 'discuss'))]],
   ];
   const out = [h('div', { class: 'phint' }, 'Say “park the dark-mode idea” or “the new logo is final” to the agent, or open any note and pick a label.')];
   for (const [key, title, empty, actions] of groups) {
@@ -933,7 +933,7 @@ function renderDecisions() {
     for (const c of cards) out.push(cardRow(c, actions(c)));
   }
   const unlabelled = S.board.cards.filter((c) => !c.stage).length;
-  if (unlabelled) out.push(h('button', { class: 'link', onclick: () => { msg.value = 'Go through the notes that have no label and mark each as to discuss, parked or locked in where it is clear from what we wrote. Tell me which ones you were unsure about.'; autosize(); showPanel('chat'); msg.focus(); } }, `${unlabelled} notes have no label yet. Ask the agent to sort them`));
+  if (unlabelled) out.push(h('button', { class: 'link', onclick: () => { msg.value = 'Go through the notes that have no label and mark each as under review, on hold or approved in where it is clear from what we wrote. Tell me which ones you were unsure about.'; autosize(); showPanel('chat'); msg.focus(); } }, `${unlabelled} notes have no label yet. Ask the agent to sort them`));
   $('#panelBody').replaceChildren(...out);
 }
 
