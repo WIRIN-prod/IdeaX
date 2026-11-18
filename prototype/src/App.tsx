@@ -128,13 +128,13 @@ export default function App() {
       {VIEWS.map((v) => <button key={v.id} role="tab" aria-selected={viewMode === v.id} onClick={() => setViewMode(v.id)} className={cn('inline-flex items-center gap-1.5 whitespace-nowrap rounded-md px-2.5 py-1.5 text-[13px] font-medium', viewMode === v.id ? 'bg-surface text-ink shadow-card' : 'text-mute hover:text-ink')}>{v.icon}{(!mobile || viewMode === v.id) && v.label}</button>)}
     </div>);
   const pills = wide ? (
-    <div role="group" aria-label="Filter" className="flex items-center gap-1">{FILTERS.map((f) => <button key={f.id} aria-pressed={filter === f.id} onClick={() => setFilter(f.id)} className={cn('rounded-full border px-2.5 py-1 text-xs font-medium', filter === f.id ? 'border-transparent bg-ink text-canvas' : 'border-line text-mute hover:text-ink')}>{f.label}</button>)}</div>
+    <div role="group" aria-label="Filter" className="flex items-center gap-1">{FILTERS.map((f) => <button key={f.id} aria-pressed={filter === f.id} onClick={() => setFilter(f.id)} className={cn('whitespace-nowrap rounded-full border px-2.5 py-1 text-xs font-medium', filter === f.id ? 'border-transparent bg-ink text-canvas' : 'border-line text-mute hover:text-ink')}>{f.label}</button>)}</div>
   ) : <select aria-label="Filter" value={filter} onChange={(e) => setFilter(e.target.value as Filter)} className="rounded-lg border border-line bg-surface px-2 py-1.5 text-xs">{FILTERS.map((f) => <option key={f.id} value={f.id}>{f.label}</option>)}</select>;
 
   const arrangeBtn = (
     <div className="relative">
       <div className="flex">
-        <button onClick={() => arrange('cluster')} className="inline-flex h-8 items-center gap-1.5 rounded-l-lg bg-accent px-3 text-[13px] font-medium text-accent-ink hover:opacity-90"><Sparkles size={14} />{!mobile && 'Arrange Board'}</button>
+        <button onClick={() => arrange('cluster')} className="inline-flex h-8 items-center gap-1.5 whitespace-nowrap rounded-l-lg bg-accent px-3 text-[13px] font-medium text-accent-ink hover:opacity-90"><Sparkles size={14} />{!mobile && 'Arrange Board'}</button>
         <button aria-label="Arrange options (A)" aria-expanded={menu === 'arrange'} onClick={() => setMenu(menu === 'arrange' ? null : 'arrange')} className="grid h-8 w-7 place-items-center rounded-r-lg border-l border-white/25 bg-accent text-accent-ink hover:opacity-90"><ChevronDown size={14} /></button>
       </div>
       {menu === 'arrange' && (
@@ -152,7 +152,7 @@ export default function App() {
           <div className="relative min-w-0">
             <button onClick={(e) => { e.stopPropagation(); setMenu(menu === 'workspace' ? null : 'workspace'); }} aria-expanded={menu === 'workspace'} className="flex items-center gap-2 rounded-lg px-1.5 py-1 hover:bg-sunk">
               <span className="grid h-7 w-7 place-items-center rounded-md bg-accent text-accent-ink"><Building2 size={15} /></span>
-              {!mobile && <span className="text-left leading-tight"><span className="block text-xs text-mute">Acme Corp</span><span className="block text-[13px] font-semibold">Q4 Product Strategy</span></span>}
+              {!mobile && <span className="text-left leading-tight whitespace-nowrap"><span className="block text-xs text-mute">Acme Corp</span><span className="block text-[13px] font-semibold">Q4 Product Strategy</span></span>}
               <ChevronDown size={14} className="text-mute" />
             </button>
             {menu === 'workspace' && <div className="absolute left-0 top-11 z-50 w-60 rounded-xl border border-line bg-surface p-1 shadow-pop">{['Acme Corp / Q4 Product Strategy', 'Acme Corp / Platform Roadmap', 'Acme Labs / Innovation Intake'].map((w, i) => <button key={w} className={cn('block w-full rounded-lg px-2.5 py-2 text-left text-[13px] hover:bg-sunk', i === 0 && 'font-semibold')}>{w}</button>)}</div>}
@@ -161,14 +161,14 @@ export default function App() {
             style={offline ? { background: 'color-mix(in srgb, var(--st-review) 10%, transparent)' } : undefined}>
             {offline ? <><WifiOff size={12} />{mobile ? 'AI offline' : 'AI Proxy Offline — Saving with Keyword Routing'}</> : <><span className="h-1.5 w-1.5 rounded-full bg-[color:var(--st-approved)]" />Synced</>}
           </button>
-          {!mobile && <div className="hidden items-center -space-x-1.5 lg:flex" aria-label="Online collaborators">{PEOPLE.map((p, i) => <span key={p.id} className={cn('rounded-full', i < 3 ? 'ring-2 ring-[color:var(--st-approved)]' : 'opacity-60 ring-2 ring-line')}><Avatar id={p.id} size={24} ring /></span>)}</div>}
-          {!mobile && <div className="mx-auto flex min-w-0 items-center gap-3">{seg}{pills}</div>}
+          {!mobile && <div className="hidden items-center -space-x-1.5 2xl:flex" aria-label="Online collaborators">{PEOPLE.map((p, i) => <span key={p.id} className={cn('rounded-full', i < 3 ? 'ring-2 ring-[color:var(--st-approved)]' : 'opacity-60 ring-2 ring-line')}><Avatar id={p.id} size={24} ring /></span>)}</div>}
+          {!mobile && <div className="mx-auto flex min-w-0 shrink-0 items-center gap-3">{seg}{pills}</div>}
           <div className={cn('flex items-center gap-1.5', mobile && 'ml-auto')}>
             {arrangeBtn}
             <button aria-label="Audit journal" onClick={() => { setTab('journal'); setDrawer(true); }} className="grid h-8 w-8 place-items-center rounded-lg text-mute hover:bg-sunk"><History size={16} /></button>
             <button aria-label="Toggle copilot panel" aria-pressed={drawer} onClick={() => setDrawer(!drawer)} className={cn('grid h-8 w-8 place-items-center rounded-lg hover:bg-sunk', drawer ? 'text-accent' : 'text-mute')}><PanelRight size={16} /></button>
             <button aria-label={dark ? 'Switch to light theme' : 'Switch to dark theme'} onClick={() => setDark(!dark)} className="grid h-8 w-8 place-items-center rounded-lg text-mute hover:bg-sunk">{dark ? <Sun size={16} /> : <Moon size={16} />}</button>
-            {!mobile && <span className="ml-1 inline-flex items-center gap-1.5 rounded-full border border-line py-0.5 pl-0.5 pr-2.5 text-xs font-medium"><Avatar id={ME} size={22} />Moderator</span>}
+            {!mobile && <span className="ml-1 hidden items-center gap-1.5 whitespace-nowrap rounded-full border border-line py-0.5 pl-0.5 pr-2.5 text-xs font-medium xl:inline-flex"><Avatar id={ME} size={22} />Moderator</span>}
           </div>
         </div>
         {mobile && <div className="scroll-thin flex items-center gap-2 overflow-x-auto px-3 pb-2">{seg}{pills}</div>}

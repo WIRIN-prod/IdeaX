@@ -3,7 +3,7 @@ export type Mode = 'sections' | 'matrix' | 'grid';
 export interface Frame { id: string; title: string; x: number; y: number; w: number; h: number; css: string; count: number; summary?: string }
 export interface Pos { x: number; y: number }
 export interface Laid { pos: Record<string, Pos>; frames: Frame[] }
-export const CARD_W = 280, GAP = 12, HEAD = 64, PAD = 16;
+export const CARD_W = 280, GAP = 12, HEAD = 80, PAD = 16;
 export const cardH = (c: Card) => (c.kind === 'text' ? 188 : c.kind === 'link' ? 262 : 292);
 
 export function layout(cards: Card[], mode: Mode, prev: Record<string, Pos> = {}, byTheme = false): Laid {
@@ -14,7 +14,8 @@ export function layout(cards: Card[], mode: Mode, prev: Record<string, Pos> = {}
       let list = cards.filter((c) => c.section === s.id).sort((a, b) => a.n - b.n);
       if (byTheme) list = [...list].sort((a, b) => (a.tags[0] ?? '').localeCompare(b.tags[0] ?? ''));
       const x = 40 + i * (CARD_W + PAD * 2 + 28), y = 80; let cy = y + HEAD;
-      list.forEach((c) => { keep(c, { x: x + PAD, y: cy }); cy += cardH(c) + GAP; });
+      list = [...list.filter((c) => c.pinned), ...list.filter((c) => !c.pinned)]; // pinned cards lead their section so nothing overlaps them
+      list.forEach((c) => { pos[c.id] = { x: x + PAD, y: cy }; cy += cardH(c) + GAP; });
       frames.push({ id: s.id, title: s.title, x, y, w: CARD_W + PAD * 2, h: cy - y - GAP + PAD + (list.length ? 0 : 60), css: s.css, count: list.length, summary: s.summary });
     });
   } else if (mode === 'matrix') {
