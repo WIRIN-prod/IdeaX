@@ -6,8 +6,6 @@ The agent runs through a **LiteLLM proxy** with an ordinary LiteLLM key (no Clau
 
 ![IdeaX board](docs/screenshots/overview.png)
 
-<img src="docs/screenshots/mobile.png" width="260" alt="IdeaX on a phone">
-
 [![Watch the 22-second launch video](docs/brag.jpg)](docs/brag.mp4)
 
 ## Features
