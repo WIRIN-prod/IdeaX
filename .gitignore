@@ -6,3 +6,4 @@ uploads/
 .agents/
 .claude/
 skills-lock.json
+brag-output/
