@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
-  <meta name="theme-color" content="#120b10">
+  <meta name="theme-color" content="#0C66E4">
   <meta name="mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <title>IdeaX</title>
@@ -22,14 +22,14 @@
       <div class="brand"><span class="logo"></span><b id="title">IdeaX</b></div>
       <input id="search" type="search" placeholder="Search everything…" autocomplete="off">
       <div class="tools">
-        <button id="searchBtn" class="tbtn only-small" title="Search">🔍</button>
-        <button id="arrange" class="tbtn gold" title="Let the agent tidy and re-arrange the whole board">✨<span class="hide-small"> Arrange</span></button>
-        <button id="journalBtn" class="tbtn" title="Journal: everything you added, newest first">🕘<span class="hide-small"> Journal</span></button>
-        <button id="undo" class="tbtn" title="Undo last change" disabled>↶</button>
-        <button id="addSec" class="tbtn" title="Add a section">+<span class="hide-small"> Section</span></button>
-        <span class="zoom hide-small"><button id="zoomOut" class="tbtn" title="Zoom out">−</button><span id="zoomLbl">100%</span><button id="zoomIn" class="tbtn" title="Zoom in">+</button></span>
-        <button id="fit" class="tbtn" title="Fit to screen">⤢<span class="hide-small"> Fit</span></button>
-        <button id="theme" class="tbtn hide-small" title="Light / dark">◐</button>
+        <button id="searchBtn" class="tbtn only-small" title="Search"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="6"/><path d="m20 20-4.5-4.5"/></svg></button>
+        <button id="arrange" class="tbtn gold" title="Let the agent tidy and re-arrange the whole board"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3l1.9 5.1L19 10l-5.1 1.9L12 17l-1.9-5.1L5 10l5.1-1.9z"/></svg><span class="hide-small">Arrange</span></button>
+        <button id="journalBtn" class="tbtn" title="Journal: everything you added, newest first"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8"/><path d="M12 8v4l3 2"/></svg><span class="hide-small">Journal</span></button>
+        <button id="undo" class="tbtn" title="Undo last change" disabled aria-label="Undo"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 14 4 9l5-5"/><path d="M4 9h10a6 6 0 0 1 0 12h-3"/></svg></button>
+        <button id="addSec" class="tbtn" title="Add a section"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg><span class="hide-small">Section</span></button>
+        <span class="zoom hide-small"><button id="zoomOut" class="tbtn" title="Zoom out" aria-label="Zoom out"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14"/></svg></button><span id="zoomLbl">100%</span><button id="zoomIn" class="tbtn" title="Zoom in" aria-label="Zoom in"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg></button></span>
+        <button id="fit" class="tbtn" title="Fit to screen"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/></svg><span class="hide-small">Fit</span></button>
+        <button id="theme" class="tbtn hide-small" title="Light / dark" aria-label="Toggle theme"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8"/><path d="M12 4v16" /><path d="M12 4a8 8 0 0 1 0 16z" fill="currentColor"/></svg></button>
       </div>
     </header>
 
@@ -39,7 +39,7 @@
     <aside id="panel" hidden>
       <div class="panel-head">
         <div class="tabs"><button data-tab="chat" class="tab">Agent</button><button data-tab="decisions" class="tab">Decisions</button><button data-tab="journal" class="tab">Journal</button></div>
-        <button id="panelClose" class="tbtn">✕</button>
+        <button id="panelClose" class="tbtn" aria-label="Close panel"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg></button>
       </div>
       <div id="panelBody"></div>
     </aside>
@@ -49,10 +49,10 @@
       <div id="scope" hidden></div>
       <div id="atts"></div>
       <div class="row">
-        <button id="chatBtn" class="cbtn" title="Open the conversation with the agent">💬</button>
-        <button id="attBtn" class="cbtn" title="Add photos">📎</button>
+        <button id="chatBtn" class="cbtn" title="Open the conversation with the agent" aria-label="Open agent chat"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 5h14v10H10l-5 4z"/></svg></button>
+        <button id="attBtn" class="cbtn" title="Add photos" aria-label="Attach photos"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="m20 11-8 8a5 5 0 0 1-7-7l8-8a3.5 3.5 0 0 1 5 5l-8 8a2 2 0 0 1-3-3l7-7"/></svg></button>
         <textarea id="msg" rows="1" enterkeyhint="send" placeholder="Capture an idea or ask the agent…"></textarea>
-        <button id="send" class="cbtn primary" title="Send">➤</button>
+        <button id="send" class="cbtn primary" title="Send" aria-label="Send"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 12 20 4l-5 16-3-7z"/></svg></button>
       </div>
       <input type="file" id="file" accept="image/*" multiple hidden>
     </footer>
@@ -60,7 +60,7 @@
 
   <div id="lock" hidden>
     <form id="lockForm">
-      <div class="logo big">💡</div>
+      <div class="logo big"></div>
       <h2>IdeaX</h2>
       <input id="pin" type="password" inputmode="numeric" autocomplete="current-password" placeholder="PIN" autofocus>
       <button class="primary">Unlock</button>

@@ -32,4 +32,7 @@ const out = 'docs/screenshots';
 const desk = await (await b.newContext({ viewport: { width: 1360, height: 860 }, colorScheme: 'light' })).newPage();
 await desk.goto(base); await desk.waitForTimeout(1200);
 await desk.screenshot({ path: `${out}/overview.png` });
+const dk = await (await b.newContext({ viewport: { width: 1360, height: 860 }, colorScheme: 'dark' })).newPage();
+await dk.goto(base); await dk.waitForTimeout(1200);
+await dk.screenshot({ path: '/tmp/claude-1000/dark.png' });
 await b.close(); srv.kill();
